@@ -1,54 +1,89 @@
 import { router } from '@kit.ArkUI'
-import { CategoryDto } from '../model/ApiModels'
 import { GestureApi } from '../api/GestureApi'
-import { GestureListPageParams } from '../model/GestureModels'
+import { GestureItemDto } from '../model/ApiModels'
+import { GestureListPageParams, GesturePracticePageParams } from '../model/GestureModels'
 
 @Entry
 @Component
-struct Index {
-  @State categoryList: CategoryDto[] = []
+struct GestureListPage {
+  @State categoryId: number = 0
+  @State categoryName: string = ''
+  @State gestureList: GestureItemDto[] = []
   @State loading: boolean = false
   @State errorText: string = ''
 
   aboutToAppear(): void {
-    this.loadCategories()
+    this.readParams()
+    this.loadGestureItems()
   }
 
-  private async loadCategories(): Promise<void> {
+  private readParams(): void {
+    try {
+      let params = router.getParams() as GestureListPageParams
+      if (params) {
+        this.categoryId = Number(params.categoryId)
+        this.categoryName = String(params.categoryName)
+      }
+    } catch (err) {
+      console.error(`读取手势列表页参数失败：${JSON.stringify(err)}`)
+    }
+  }
+
+  private async loadGestureItems(): Promise<void> {
     this.loading = true
     this.errorText = ''
 
     try {
-      this.categoryList = await GestureApi.getCategories()
-      console.error(`分类数量：${this.categoryList.length}`)
+      this.gestureList = await GestureApi.getGestureItems(this.categoryId)
+      console.error(`手势数量：${this.gestureList.length}`)
     } catch (err) {
-      this.errorText = `分类加载失败：${JSON.stringify(err)}`
+      this.errorText = `手势列表加载失败：${JSON.stringify(err)}`
       console.error(this.errorText)
     } finally {
       this.loading = false
     }
   }
 
-  private goToGestureList(item: CategoryDto): void {
+  private goBack(): void {
     try {
-      let params: GestureListPageParams = new GestureListPageParams(item.id, item.name)
+      router.back()
+    } catch (err) {
+      console.error(`返回分类页失败：${JSON.stringify(err)}`)
+    }
+  }
+
+  private goToPractice(item: GestureItemDto): void {
+    try {
+      let params: GesturePracticePageParams = new GesturePracticePageParams(
+        item.id,
+        item.chineseName,
+        item.label
+      )
       router.pushUrl({
-        url: 'pages/GestureListPage',
+        url: 'pages/GesturePracticePage',
         params: params
       }).catch((err: Object) => {
-        console.error(`跳转手势列表页失败：${JSON.stringify(err)}`)
+        console.error(`跳转训练页失败：${JSON.stringify(err)}`)
       })
     } catch (err) {
-      console.error(`跳转手势列表页异常：${JSON.stringify(err)}`)
+      console.error(`跳转训练页异常：${JSON.stringify(err)}`)
     }
   }
 
   @Builder
   private buildTopBar(): void {
     Row() {
-      Text('手势分类')
+      Button('返回')
+        .fontSize(16)
+        .height(40)
+        .onClick(() => {
+          this.goBack()
+        })
+
+      Text(this.categoryName === '' ? '手势列表' : this.categoryName)
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
+        .margin({ left: 16 })
 
       Blank()
     }
@@ -58,14 +93,14 @@ struct Index {
   }
 
   @Builder
-  private buildCategoryItem(item: CategoryDto): void {
+  private buildGestureItem(item: GestureItemDto): void {
     Row() {
       Column({ space: 6 }) {
-        Text(item.name)
+        Text(item.chineseName)
           .fontSize(22)
           .fontWeight(FontWeight.Medium)
 
-        Text(`logo: ${item.logo}`)
+        Text(`label: ${item.label}`)
           .fontSize(14)
           .fontColor('#888888')
       }
@@ -74,7 +109,7 @@ struct Index {
 
       Blank()
 
-      Text('进入')
+      Text('训练')
         .fontSize(16)
         .fontColor('#3F7BFF')
     }
@@ -84,7 +119,7 @@ struct Index {
     .borderRadius(16)
     .justifyContent(FlexAlign.SpaceBetween)
     .onClick(() => {
-      this.goToGestureList(item)
+      this.goToPractice(item)
     })
   }
 
@@ -113,11 +148,15 @@ struct Index {
         .padding(16)
         .alignItems(HorizontalAlign.Start)
         .justifyContent(FlexAlign.Start)
-      } else if (this.categoryList.length === 0) {
-        Column() {
-          Text('当前没有分类数据')
+      } else if (this.gestureList.length === 0) {
+        Column({ space: 8 }) {
+          Text('当前分类下还没有手势数据')
             .fontSize(18)
             .fontColor('#666666')
+
+          Text('后面可以继续补这个分类的数据')
+            .fontSize(14)
+            .fontColor('#999999')
         }
         .width('100%')
         .layoutWeight(1)
@@ -127,13 +166,13 @@ struct Index {
       } else {
         List({ space: 16 }) {
           ForEach(
-            this.categoryList,
-            (item: CategoryDto) => {
+            this.gestureList,
+            (item: GestureItemDto) => {
               ListItem() {
-                this.buildCategoryItem(item)
+                this.buildGestureItem(item)
               }
             },
-            (item: CategoryDto) => item.id.toString()
+            (item: GestureItemDto) => item.id.toString()
           )
         }
         .width('100%')

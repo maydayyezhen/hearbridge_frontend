@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\77349\\.ohos\\config\\default_hearbridge_frontend_Xrs2p96KIQ430McaepBc7htdiiqltBPbz5jnvb5CUnU=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BF365DD1981C3E3A56D58C7C1929DA077F508C54CB12D5CE343DBF161305C5CB553995DD1C0F97C",
+          "profile": "C:\\Users\\77349\\.ohos\\config\\default_hearbridge_frontend_Xrs2p96KIQ430McaepBc7htdiiqltBPbz5jnvb5CUnU=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\77349\\.ohos\\config\\default_hearbridge_frontend_Xrs2p96KIQ430McaepBc7htdiiqltBPbz5jnvb5CUnU=.p12",
+          "storePassword": "0000001B3AE8A541AC638126A3EC71213E1C3261EFCE819F04AB0BC6A8360459AC3A5DF60985E1B1071FEF"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
