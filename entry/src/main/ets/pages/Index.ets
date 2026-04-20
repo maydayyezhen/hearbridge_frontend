@@ -141,6 +141,7 @@ struct Index {
         .padding({ left: 16, right: 16, top: 16, bottom: 24 })
         .alignListItem(ListItemAlign.Start)
         .edgeEffect(EdgeEffect.None)
+        .scrollBar(BarState.Off)
         .backgroundColor('#FFFFFF')
       }
     }

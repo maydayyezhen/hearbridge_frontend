@@ -11,6 +11,10 @@
     {
       "name": "EntryAbility_label",
       "value": "label"
+    },
+    {
+      "name": "camera_permission_reason",
+      "value": "用于手势训练时打开摄像头进行实时预览"
     }
   ]
 }
