@@ -1,9 +1,13 @@
 import { router, window, display } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
 import { camera } from '@kit.CameraKit'
+import { image } from '@kit.ImageKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl'
+
 import { GesturePracticePageParams } from '../model/GestureModels'
+import { GestureWsApi } from '../api/GestureWsApi'
+import { GestureWsResultMessage } from '../model/GestureWsModels'
 
 @Entry
 @Component
@@ -12,17 +16,22 @@ struct GesturePracticePage {
   @State chineseName: string = ''
   @State label: string = ''
 
+  // 全屏相机层显示状态
   @State showCameraOverlay: boolean = false
+
+  // 相机预览相关状态
   @State surfaceId: string = ''
   @State cameraStatusText: string = '等待打开相机'
   @State previewStarted: boolean = false
 
-  // 预览区域显示比例（宽 / 高），默认先给一个竖屏值
-  @State previewAspectRatio: number = 9 / 16
-
-  // 相机层自己的安全区内边距
+  // 悬浮层安全区内边距
   @State topSafeInsetVp: number = 0
   @State bottomSafeInsetVp: number = 0
+
+  // 识别提示状态
+  @State recognitionStatusText: string = '点击开始识别'
+  @State isRecognizing: boolean = false
+  @State hasRecognitionSucceeded: boolean = false
 
   // XComponent 控制器
   private xComponentController: XComponentController = new XComponentController()
@@ -34,15 +43,35 @@ struct GesturePracticePage {
   private currentPreviewOutput?: camera.PreviewOutput
   private currentSession?: camera.PhotoSession
 
-  // 避免重复启动
+  // 避免重复启动相机
   private isCameraStarting: boolean = false
+
+  // WebSocket 手势识别服务
+  private gestureWsApi: GestureWsApi = new GestureWsApi()
+
+  // 帧发送节流
+  private isFrameSending: boolean = false
+  private readonly frameSendIntervalMs: number = 90
+
+  // 抓帧循环
+  private captureTimerId: number = -1
+  private captureInProgress: boolean = false
+  private pendingFrame: ArrayBuffer | null = null
+
+  // start 初始化消息里需要的尺寸信息
+  private gestureFrameWidth: number = 320
+  private gestureFrameHeight: number = 240
+  private readonly gestureFrameFps: number = 10
+  private readonly jpegQuality: number = 80
 
   aboutToAppear(): void {
     this.readParams()
   }
 
   aboutToDisappear(): void {
+    this.stopCaptureLoop()
     this.safeStopCamera()
+    this.gestureWsApi.disconnect()
   }
 
   /**
@@ -72,6 +101,30 @@ struct GesturePracticePage {
     }
   }
 
+  /**
+   * 打开全屏相机层
+   */
+  private async openCameraOverlay(): Promise<void> {
+    this.cameraStatusText = '等待创建预览面'
+    this.previewStarted = false
+    this.resetRecognitionView()
+    await this.updateWindowImmersive(true)
+    this.showCameraOverlay = true
+  }
+
+  /**
+   * 关闭全屏相机层
+   */
+  private async closeCameraOverlay(): Promise<void> {
+    await this.stopGestureRecognition(true)
+    await this.safeStopCamera()
+    this.showCameraOverlay = false
+    this.surfaceId = ''
+    this.previewStarted = false
+    this.cameraStatusText = '等待打开相机'
+    this.resetRecognitionView()
+    await this.updateWindowImmersive(false)
+  }
 
   /**
    * 运行时申请相机权限
@@ -95,14 +148,93 @@ struct GesturePracticePage {
   }
 
   /**
-   * 选择一个可用摄像头，优先前置
+   * 切换窗口沉浸式布局，并同步读取上下安全区高度
+   */
+  private async updateWindowImmersive(enable: boolean): Promise<void> {
+    try {
+      const context = getContext(this) as common.UIAbilityContext
+      const win = await window.getLastWindow(context)
+
+      await win.setWindowLayoutFullScreen(enable)
+
+      if (enable) {
+        const systemArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
+        const navArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
+
+        this.topSafeInsetVp = px2vp(systemArea.topRect.height)
+        this.bottomSafeInsetVp = px2vp(navArea.bottomRect.height)
+      } else {
+        this.topSafeInsetVp = 0
+        this.bottomSafeInsetVp = 0
+      }
+    } catch (error) {
+      console.error(`更新沉浸式布局失败：${JSON.stringify(error)}`)
+      this.topSafeInsetVp = 0
+      this.bottomSafeInsetVp = 0
+    }
+  }
+
+  /**
+   * 顶部悬浮区 padding
+   */
+  private getOverlayTopPadding(): number {
+    return (this.topSafeInsetVp > 0 ? this.topSafeInsetVp : 32) + 8
+  }
+
+  /**
+   * 底部悬浮区 padding
+   */
+  private getOverlayBottomPadding(): number {
+    return (this.bottomSafeInsetVp > 0 ? this.bottomSafeInsetVp : 24) + 16
+  }
+
+  /**
+   * 重置识别展示状态
+   */
+  private resetRecognitionView(): void {
+    this.recognitionStatusText = '点击开始识别'
+    this.hasRecognitionSucceeded = false
+  }
+
+  /**
+   * 主按钮文案
+   */
+  private getPrimaryButtonText(): string {
+    if (this.hasRecognitionSucceeded) {
+      return '重新开始'
+    }
+    return this.isRecognizing ? '停止识别' : '开始识别'
+  }
+
+  /**
+   * 状态卡背景色
+   */
+  private getStatusCardBackgroundColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return 'rgba(34,197,94,0.34)'
+    }
+    return 'rgba(0,0,0,0.28)'
+  }
+
+  /**
+   * 状态卡边框色
+   */
+  private getStatusCardBorderColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return 'rgba(134,239,172,0.82)'
+    }
+    return 'rgba(255,255,255,0.14)'
+  }
+
+  /**
+   * 选择摄像头，优先前置
    */
   private pickCameraDevice(cameraList: Array<camera.CameraDevice>): camera.CameraDevice | undefined {
     if (!cameraList || cameraList.length === 0) {
       return undefined
     }
 
-    for (let i = 0; i < cameraList.length; i++) {
+    for (let i = 0; i < cameraList.length; i += 1) {
       if (cameraList[i].cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT) {
         return cameraList[i]
       }
@@ -112,12 +244,46 @@ struct GesturePracticePage {
   }
 
   /**
-   * XComponent 加载完成后，拿到 surfaceId 并启动相机
+   * 计算 profile 在竖屏显示下的宽高比（宽 / 高）
+   */
+  private getPortraitRatioOfProfile(profile: camera.Profile): number {
+    const width = profile.size.width
+    const height = profile.size.height
+    const shortSide = Math.min(width, height)
+    const longSide = Math.max(width, height)
+    return shortSide / longSide
+  }
+
+  /**
+   * 为显示流选择最接近屏幕比例的 profile
+   */
+  private async pickBestPreviewProfile(profiles: Array<camera.Profile>): Promise<camera.Profile> {
+    const context = getContext(this) as common.UIAbilityContext
+    const win = await window.getLastWindow(context)
+    const rect = win.getWindowProperties().windowRect
+    const targetRatio = rect.width / rect.height
+
+    let bestProfile = profiles[0]
+    let bestDiff = Number.MAX_VALUE
+
+    for (let i = 0; i < profiles.length; i += 1) {
+      const currentRatio = this.getPortraitRatioOfProfile(profiles[i])
+      const diff = Math.abs(currentRatio - targetRatio)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestProfile = profiles[i]
+      }
+    }
+
+    return bestProfile
+  }
+
+  /**
+   * XComponent 加载完成后获取 surfaceId 并启动相机
    */
   private async handleSurfaceLoaded(): Promise<void> {
     try {
       this.surfaceId = this.xComponentController.getXComponentSurfaceId()
-      console.info(`相机预览 surfaceId：${this.surfaceId}`)
       await this.startRealCamera()
     } catch (error) {
       const err = error as BusinessError
@@ -127,7 +293,7 @@ struct GesturePracticePage {
   }
 
   /**
-   * 启动真实相机预览
+   * 启动真实相机
    */
   private async startRealCamera(): Promise<void> {
     if (this.isCameraStarting) {
@@ -149,15 +315,11 @@ struct GesturePracticePage {
         return
       }
 
-      // 避免重复打开时旧会话残留
       await this.safeStopCamera()
 
       const context = getContext(this) as common.UIAbilityContext
-
-      // 1. 获取 CameraManager
       this.cameraManager = camera.getCameraManager(context)
 
-      // 2. 获取可用摄像头
       const cameraList: Array<camera.CameraDevice> = this.cameraManager.getSupportedCameras()
       if (!cameraList || cameraList.length === 0) {
         this.cameraStatusText = '未找到可用摄像头'
@@ -178,22 +340,17 @@ struct GesturePracticePage {
         return
       }
 
-      // 选一个比例最接近当前窗口的 profile
-      const previewProfile = await this.pickBestPreviewProfile(outputCapability.previewProfiles)
+      const displayProfile = await this.pickBestPreviewProfile(outputCapability.previewProfiles)
 
-      // 更新预览显示比例（竖屏宽 / 高）
-      this.previewAspectRatio = this.getPortraitRatioOfProfile(previewProfile)
-
-      // 让 XComponent 持有的 surface 尺寸与预览 profile 一致
       this.xComponentController.setXComponentSurfaceSize({
-        surfaceWidth: previewProfile.size.width,
-        surfaceHeight: previewProfile.size.height
+        surfaceWidth: displayProfile.size.width,
+        surfaceHeight: displayProfile.size.height
       })
 
       this.currentCameraInput = this.cameraManager.createCameraInput(this.currentCamera)
       await this.currentCameraInput.open()
 
-      this.currentPreviewOutput = this.cameraManager.createPreviewOutput(previewProfile, this.surfaceId)
+      this.currentPreviewOutput = this.cameraManager.createPreviewOutput(displayProfile, this.surfaceId)
 
       this.currentPreviewOutput.on('frameStart', () => {
         this.previewStarted = true
@@ -211,7 +368,6 @@ struct GesturePracticePage {
       this.currentSession.addOutput(this.currentPreviewOutput)
       await this.currentSession.commitConfig()
 
-      // 提交配置后，根据当前屏幕方向设置预览旋转
       const displayRotation = display.getDefaultDisplaySync().rotation * camera.ImageRotation.ROTATION_90
       const previewRotation = this.currentPreviewOutput.getPreviewRotation(displayRotation)
       this.currentPreviewOutput.setPreviewRotation(previewRotation, false)
@@ -225,6 +381,273 @@ struct GesturePracticePage {
     } finally {
       this.isCameraStarting = false
     }
+  }
+
+  /**
+   * 从预览 surface 抓一帧，并编码成 JPEG
+   */
+  private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
+    if (!this.surfaceId) {
+      return null
+    }
+
+    let sourceMap: image.PixelMap | null = null
+    let packer: image.ImagePacker | null = null
+
+    try {
+      sourceMap = await image.createPixelMapFromSurface(this.surfaceId)
+      const info = sourceMap.getImageInfoSync()
+
+      this.gestureFrameWidth = info.size.width
+      this.gestureFrameHeight = info.size.height
+
+      packer = image.createImagePacker()
+      const jpegBytes = await packer.packToData(sourceMap, {
+        format: 'image/jpeg',
+        quality: this.jpegQuality,
+        bufferSize: info.size.width * info.size.height * 4
+      })
+
+      if (jpegBytes.byteLength <= 0) {
+        return null
+      }
+
+      return jpegBytes
+    } catch (error) {
+      console.error(`[GesturePracticePage] capture jpeg failed: ${JSON.stringify(error)}`)
+      return null
+    } finally {
+      try {
+        if (packer !== null) {
+          await packer.release()
+        }
+      } catch (_error) {
+      }
+
+      try {
+        if (sourceMap !== null) {
+          sourceMap.release()
+        }
+      } catch (_error) {
+      }
+    }
+  }
+
+  /**
+   * 开始抓帧循环
+   */
+  private startCaptureLoop(): void {
+    this.stopCaptureLoop()
+
+    this.captureTimerId = setInterval(() => {
+      void this.captureAndSendLatestFrame()
+    }, this.frameSendIntervalMs)
+  }
+
+  /**
+   * 停止抓帧循环
+   */
+  private stopCaptureLoop(): void {
+    if (this.captureTimerId >= 0) {
+      clearInterval(this.captureTimerId)
+      this.captureTimerId = -1
+    }
+
+    this.pendingFrame = null
+    this.captureInProgress = false
+    this.isFrameSending = false
+  }
+
+  /**
+   * 抓取当前帧并入队
+   */
+  private async captureAndSendLatestFrame(): Promise<void> {
+    if (!this.isRecognizing || !this.surfaceId || this.hasRecognitionSucceeded) {
+      return
+    }
+
+    if (this.captureInProgress) {
+      return
+    }
+
+    this.captureInProgress = true
+
+    try {
+      const jpegBytes = await this.captureCurrentFrameAsJpeg()
+      if (!jpegBytes || jpegBytes.byteLength <= 0) {
+        return
+      }
+
+      this.enqueueFrame(jpegBytes)
+    } catch (error) {
+      console.error(`[GesturePracticePage] capture loop error: ${JSON.stringify(error)}`)
+    } finally {
+      this.captureInProgress = false
+    }
+  }
+
+  /**
+   * 覆盖队列里的旧帧，只保留最新一帧
+   */
+  private enqueueFrame(frame: ArrayBuffer): void {
+    this.pendingFrame = frame
+    void this.flushPendingFrame()
+  }
+
+  /**
+   * 发送队列里的最新帧
+   */
+  private async flushPendingFrame(): Promise<void> {
+    if (this.isFrameSending || this.pendingFrame === null) {
+      return
+    }
+
+    if (!this.isRecognizing || this.hasRecognitionSucceeded) {
+      return
+    }
+
+    if (!this.gestureWsApi.isConnected() || !this.gestureWsApi.isStarted()) {
+      return
+    }
+
+    const frame = this.pendingFrame
+    this.pendingFrame = null
+    this.isFrameSending = true
+
+    try {
+      await this.gestureWsApi.sendFrame(frame)
+    } finally {
+      this.isFrameSending = false
+      if (this.pendingFrame !== null) {
+        void this.flushPendingFrame()
+      }
+    }
+  }
+
+  /**
+   * 开始识别
+   */
+  private async startGestureRecognition(): Promise<void> {
+    if (this.isRecognizing) {
+      return
+    }
+
+    if (!this.previewStarted || !this.surfaceId) {
+      this.recognitionStatusText = '预览未就绪'
+      return
+    }
+
+    this.resetRecognitionView()
+    this.isRecognizing = true
+    this.recognitionStatusText = '请保持手势，等待识别（0/30）'
+
+    const connected = await this.gestureWsApi.connect(
+      (result: GestureWsResultMessage) => {
+        this.handleGestureWsResult(result)
+      },
+      (_message: string) => {
+        this.recognitionStatusText = '识别服务异常'
+      },
+      () => {
+        this.isRecognizing = false
+        this.stopCaptureLoop()
+        if (!this.hasRecognitionSucceeded) {
+          this.recognitionStatusText = '识别已停止'
+        }
+      }
+    )
+
+    if (!connected) {
+      this.isRecognizing = false
+      this.recognitionStatusText = '识别服务连接失败'
+      return
+    }
+
+    // 先抓一帧，确定 start 里要发的尺寸
+    const firstFrame = await this.captureCurrentFrameAsJpeg()
+    if (!firstFrame || this.gestureFrameWidth <= 0 || this.gestureFrameHeight <= 0) {
+      this.isRecognizing = false
+      this.recognitionStatusText = '首帧抓取失败'
+      await this.gestureWsApi.disconnect()
+      return
+    }
+
+    const started = await this.gestureWsApi.startSession(
+      this.gestureFrameWidth,
+      this.gestureFrameHeight,
+      this.gestureFrameFps
+    )
+
+    if (!started) {
+      this.isRecognizing = false
+      this.recognitionStatusText = '识别服务启动失败'
+      await this.gestureWsApi.disconnect()
+      return
+    }
+
+    this.enqueueFrame(firstFrame)
+    this.startCaptureLoop()
+  }
+
+  /**
+   * 停止识别
+   * @param preserveStatus 是否保留当前提示文案
+   */
+  private async stopGestureRecognition(preserveStatus: boolean = false): Promise<void> {
+    this.isRecognizing = false
+    this.stopCaptureLoop()
+
+    if (!preserveStatus) {
+      this.resetRecognitionView()
+    }
+
+    await this.gestureWsApi.disconnect()
+  }
+
+  /**
+   * 识别成功后高亮并停止
+   */
+  private async handleRecognitionSuccess(): Promise<void> {
+    if (this.hasRecognitionSucceeded) {
+      return
+    }
+
+    this.hasRecognitionSucceeded = true
+    this.recognitionStatusText = '识别成功'
+    await this.stopGestureRecognition(true)
+  }
+
+  /**
+   * 处理识别服务返回结果
+   */
+  private handleGestureWsResult(result: GestureWsResultMessage): void {
+    if (this.hasRecognitionSucceeded) {
+      return
+    }
+
+    if (result.status === 'no_hand' || result.status === 'missing_hand') {
+      this.recognitionStatusText = '没有检测到手，请把手放进画面中'
+      return
+    }
+
+    if (result.status === 'warming_up') {
+      const safeTotal = result.windowSize > 0 ? result.windowSize : 30
+      const safeProgress = Math.max(0, Math.min(result.validFrames, safeTotal))
+      this.recognitionStatusText = `请保持手势，等待识别（${safeProgress}/${safeTotal}）`
+      return
+    }
+
+    if (result.status === 'predicted') {
+      const recognizedLabel = result.label && result.label.length > 0 ? result.label : '未知动作'
+      if (result.label === this.label) {
+        void this.handleRecognitionSuccess()
+      } else {
+        this.recognitionStatusText = `当前是「${recognizedLabel}」，不是目标动作`
+      }
+      return
+    }
+
+    this.recognitionStatusText = '等待识别结果'
   }
 
   /**
@@ -267,98 +690,6 @@ struct GesturePracticePage {
   }
 
   /**
-   * 获取当前窗口的目标竖屏宽高比（宽 / 高）
-   */
-  private async getTargetPortraitRatio(): Promise<number> {
-    const context = getContext(this) as common.UIAbilityContext
-    const win = await window.getLastWindow(context)
-    const rect = win.getWindowProperties().windowRect
-    return rect.width / rect.height
-  }
-
-  /**
-   * 将 profile 的尺寸换算成竖屏显示时的宽高比（宽 / 高）
-   */
-  private getPortraitRatioOfProfile(profile: camera.Profile): number {
-    const width = profile.size.width
-    const height = profile.size.height
-    const shortSide = Math.min(width, height)
-    const longSide = Math.max(width, height)
-    return shortSide / longSide
-  }
-
-  /**
-   * 选一个和当前窗口比例最接近的预览 profile
-   */
-  private async pickBestPreviewProfile(profiles: Array<camera.Profile>): Promise<camera.Profile> {
-    const targetRatio = await this.getTargetPortraitRatio()
-    let bestProfile: camera.Profile = profiles[0]
-    let bestDiff: number = Number.MAX_VALUE
-
-    for (let i = 0; i < profiles.length; i++) {
-      const currentRatio = this.getPortraitRatioOfProfile(profiles[i])
-      const diff = Math.abs(currentRatio - targetRatio)
-      if (diff < bestDiff) {
-        bestDiff = diff
-        bestProfile = profiles[i]
-      }
-    }
-
-    return bestProfile
-  }
-
-  /**
-   * 切换窗口沉浸式布局，并读取上下避让区高度
-   */
-  private async updateWindowImmersive(enable: boolean): Promise<void> {
-    const context = getContext(this) as common.UIAbilityContext
-    const win = await window.getLastWindow(context)
-
-    await win.setWindowLayoutFullScreen(enable)
-
-    if (enable) {
-      const systemArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
-      const navArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
-
-      this.topSafeInsetVp = px2vp(systemArea.topRect.height)
-      this.bottomSafeInsetVp = px2vp(navArea.bottomRect.height)
-    } else {
-      this.topSafeInsetVp = 0
-      this.bottomSafeInsetVp = 0
-    }
-  }
-
-  /**
-   * 获取顶部悬浮区 padding，避免被状态栏压住
-   */
-  private getOverlayTopPadding(): number {
-    return (this.topSafeInsetVp > 0 ? this.topSafeInsetVp : 32) + 8
-  }
-
-  /**
-   * 获取底部悬浮区 padding，避免贴到底部手势条
-   */
-  private getOverlayBottomPadding(): number {
-    return (this.bottomSafeInsetVp > 0 ? this.bottomSafeInsetVp : 24) + 16
-  }
-
-  private async openCameraOverlay(): Promise<void> {
-    this.cameraStatusText = '等待创建预览面'
-    this.previewStarted = false
-    await this.updateWindowImmersive(true)
-    this.showCameraOverlay = true
-  }
-
-  private async closeCameraOverlay(): Promise<void> {
-    await this.safeStopCamera()
-    this.showCameraOverlay = false
-    this.surfaceId = ''
-    this.previewStarted = false
-    this.cameraStatusText = '等待打开相机'
-    await this.updateWindowImmersive(false)
-  }
-
-  /**
    * 顶部栏
    */
   @Builder
@@ -388,16 +719,11 @@ struct GesturePracticePage {
 
   /**
    * 全屏相机层
-   * 相机预览铺满整个屏幕，按钮和文字悬浮在画面上方
-   */
-  /**
-   * 全屏相机层
-   * 相机预览铺满屏幕，顶部和底部控件作为悬浮 HUD 显示
    */
   @Builder
   private buildCameraOverlay(): void {
     Stack({ alignContent: Alignment.TopStart }) {
-      // 1. 最底层：全屏相机预览
+      // 最底层：全屏相机预览
       XComponent({
         id: 'gesture-camera-preview',
         type: XComponentType.SURFACE,
@@ -413,7 +739,7 @@ struct GesturePracticePage {
         .height('100%')
         .backgroundColor('#000000')
 
-      // 2. 顶层 HUD：一个全屏 Column，负责稳定排版
+      // HUD 悬浮层
       Column() {
         // 顶部区域
         Column({ space: 10 }) {
@@ -440,12 +766,25 @@ struct GesturePracticePage {
           }
           .width('100%')
 
-          Text(this.cameraStatusText)
-            .fontSize(13)
-            .fontColor('rgba(255,255,255,0.92)')
-            .backgroundColor('rgba(0,0,0,0.28)')
-            .borderRadius(14)
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+          Column({ space: 10 }) {
+            Text(`目标动作：${this.label}`)
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#FFFFFF')
+
+            Text(this.recognitionStatusText)
+              .fontSize(15)
+              .lineHeight(22)
+              .fontColor('#FFFFFF')
+          }
+          .width('100%')
+          .padding(12)
+          .backgroundColor(this.getStatusCardBackgroundColor())
+          .borderRadius(16)
+          .border({
+            width: 1,
+            color: this.getStatusCardBorderColor()
+          })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
@@ -459,22 +798,27 @@ struct GesturePracticePage {
         Blank()
 
         // 底部区域
-        Column({ space: 12 }) {
-          Text(this.previewStarted ? '预览已启动' : '等待预览启动')
-            .fontSize(13)
-            .fontColor('rgba(255,255,255,0.84)')
-            .backgroundColor('rgba(0,0,0,0.24)')
-            .borderRadius(14)
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-
-          Button('开始识别')
+        Column() {
+          Button(this.getPrimaryButtonText())
             .width('100%')
             .height(54)
             .fontSize(20)
             .fontWeight(FontWeight.Medium)
             .fontColor('#FFFFFF')
-            .backgroundColor('rgba(255,255,255,0.22)')
+            .backgroundColor(this.hasRecognitionSucceeded ? 'rgba(34,197,94,0.55)' : 'rgba(255,255,255,0.22)')
             .borderRadius(27)
+            .onClick(async () => {
+              if (this.hasRecognitionSucceeded) {
+                await this.startGestureRecognition()
+                return
+              }
+
+              if (this.isRecognizing) {
+                await this.stopGestureRecognition(false)
+              } else {
+                await this.startGestureRecognition()
+              }
+            })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
@@ -522,7 +866,7 @@ struct GesturePracticePage {
       .height('100%')
       .backgroundColor('#FFFFFF')
 
-      // 真全屏相机覆盖层
+      // 全屏相机层
       if (this.showCameraOverlay) {
         this.buildCameraOverlay()
       }
