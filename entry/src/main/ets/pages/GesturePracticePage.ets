@@ -9,6 +9,10 @@ import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureWsApi } from '../api/GestureWsApi'
 import { GestureWsResultMessage } from '../model/GestureWsModels'
 
+import { LocalHandDetectResult, LocalHandKeyPoint, LocalHandRect } from '../model/LocalHandModels'
+import { LocalHandDetectService } from '../service/LocalHandDetectService'
+
+
 @Entry
 @Component
 struct GesturePracticePage {
@@ -32,6 +36,24 @@ struct GesturePracticePage {
   @State recognitionStatusText: string = '点击开始识别'
   @State isRecognizing: boolean = false
   @State hasRecognitionSucceeded: boolean = false
+
+  // 本地手部可视化状态
+  @State localHandPointsUi: Array<LocalHandKeyPoint> = []
+  @State localHandBoxUi: LocalHandRect | null = null
+  @State localHasHand: boolean = false
+  @State localPreviewStatusText: string = '本地：未检测到手'
+
+  // 预览区域像素尺寸
+  @State overlayWidthPx: number = 0
+  @State overlayHeightPx: number = 0
+
+  // 本地检测服务
+  private localHandDetectService: LocalHandDetectService = new LocalHandDetectService()
+
+  // 本地检测节流
+  private localDetecting: boolean = false
+  private lastLocalDetectAt: number = 0
+  private readonly localDetectIntervalMs: number = 120
 
   // XComponent 控制器
   private xComponentController: XComponentController = new XComponentController()
@@ -72,6 +94,25 @@ struct GesturePracticePage {
     this.stopCaptureLoop()
     this.safeStopCamera()
     this.gestureWsApi.disconnect()
+  }
+
+  /**
+   * 重置本地手部可视化
+   */
+  private resetLocalHandOverlay(): void {
+    this.localHandPointsUi = []
+    this.localHandBoxUi = null
+    this.localHasHand = false
+    this.localPreviewStatusText = '本地：未检测到手'
+  }
+
+  /**
+   * 重置全部识别展示
+   */
+  private resetRecognitionView(): void {
+    this.recognitionStatusText = '点击开始识别'
+    this.hasRecognitionSucceeded = false
+    this.resetLocalHandOverlay()
   }
 
   /**
@@ -186,14 +227,6 @@ struct GesturePracticePage {
    */
   private getOverlayBottomPadding(): number {
     return (this.bottomSafeInsetVp > 0 ? this.bottomSafeInsetVp : 24) + 16
-  }
-
-  /**
-   * 重置识别展示状态
-   */
-  private resetRecognitionView(): void {
-    this.recognitionStatusText = '点击开始识别'
-    this.hasRecognitionSucceeded = false
   }
 
   /**
@@ -355,6 +388,8 @@ struct GesturePracticePage {
       this.currentPreviewOutput.on('frameStart', () => {
         this.previewStarted = true
         this.cameraStatusText = '预览已启动'
+        void this.updateOverlaySize()
+        this.startCaptureLoop()
       })
 
       this.currentPreviewOutput.on('error', (previewError: BusinessError) => {
@@ -380,6 +415,21 @@ struct GesturePracticePage {
       console.error(`启动真实相机失败：code=${err.code}, message=${err.message}`)
     } finally {
       this.isCameraStarting = false
+    }
+  }
+
+  /**
+   * 读取全屏预览区域尺寸
+   */
+  private async updateOverlaySize(): Promise<void> {
+    try {
+      const context = getContext(this) as common.UIAbilityContext
+      const win = await window.getLastWindow(context)
+      const rect = win.getWindowProperties().windowRect
+      this.overlayWidthPx = rect.width
+      this.overlayHeightPx = rect.height
+    } catch (error) {
+      console.error(`读取 overlay 尺寸失败：${JSON.stringify(error)}`)
     }
   }
 
@@ -461,8 +511,13 @@ struct GesturePracticePage {
   /**
    * 抓取当前帧并入队
    */
+  /**
+   * 抓取当前帧，并分别喂给：
+   * 1）本地手部检测
+   * 2）远端 WebSocket 识别
+   */
   private async captureAndSendLatestFrame(): Promise<void> {
-    if (!this.isRecognizing || !this.surfaceId || this.hasRecognitionSucceeded) {
+    if (!this.surfaceId || !this.previewStarted) {
       return
     }
 
@@ -478,12 +533,108 @@ struct GesturePracticePage {
         return
       }
 
-      this.enqueueFrame(jpegBytes)
+      // 先跑本地检测，不依赖识别按钮
+      this.tryRunLocalHandDetection(jpegBytes)
+
+      // 再决定是否发给后端识别
+      if (this.isRecognizing && !this.hasRecognitionSucceeded) {
+        this.enqueueFrame(jpegBytes)
+      }
     } catch (error) {
-      console.error(`[GesturePracticePage] capture loop error: ${JSON.stringify(error)}`)
+      console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
     } finally {
       this.captureInProgress = false
     }
+  }
+
+  /**
+   * 图像坐标 -> 当前全屏 overlay 坐标
+   * 第一版先按等比例直接映射，后续如果边缘有轻微偏移，再补 center-crop 修正
+   */
+  private mapPointToUi(point: LocalHandKeyPoint): LocalHandKeyPoint {
+    if (this.gestureFrameWidth <= 0 || this.gestureFrameHeight <= 0 ||
+      this.overlayWidthPx <= 0 || this.overlayHeightPx <= 0) {
+      return { x: 0, y: 0, score: 0 }
+    }
+
+    let uiX = point.x / this.gestureFrameWidth * this.overlayWidthPx
+    let uiY = point.y / this.gestureFrameHeight * this.overlayHeightPx
+
+    // 前置镜像
+    uiX = this.overlayWidthPx - uiX
+
+    return {
+      x: px2vp(uiX),
+      y: px2vp(uiY),
+      score: point.score
+    }
+  }
+
+  /**
+   * 应用本地手部检测结果
+   */
+  private applyLocalHandDetectResult(result: LocalHandDetectResult): void {
+    if (!result.hasHand || !result.points || result.points.length === 0) {
+      this.localHasHand = false
+      this.localHandPointsUi = []
+      this.localHandBoxUi = null
+      this.localPreviewStatusText = '本地：未检测到手'
+      return
+    }
+
+    this.localHasHand = true
+    this.localPreviewStatusText = '本地：已检测到手'
+
+    this.localHandPointsUi = result.points.map((item: LocalHandKeyPoint) => {
+      return this.mapPointToUi(item)
+    })
+
+    if (result.box) {
+      const leftTop = this.mapPointToUi({ x: result.box.left, y: result.box.top, score: 1 })
+      const rightBottom = this.mapPointToUi({
+        x: result.box.left + result.box.width,
+        y: result.box.top + result.box.height,
+        score: 1
+      })
+
+      this.localHandBoxUi = {
+        left: leftTop.x,
+        top: leftTop.y,
+        width: rightBottom.x - leftTop.x,
+        height: rightBottom.y - leftTop.y
+      }
+    } else {
+      this.localHandBoxUi = null
+    }
+  }
+
+  /**
+   * 节流执行本地手部检测
+   */
+  private tryRunLocalHandDetection(frame: ArrayBuffer): void {
+    const now = Date.now()
+    if (this.localDetecting) {
+      return
+    }
+    if (now - this.lastLocalDetectAt < this.localDetectIntervalMs) {
+      return
+    }
+
+    this.localDetecting = true
+    this.lastLocalDetectAt = now
+
+    void this.localHandDetectService.detectFromJpeg(
+      frame,
+      this.gestureFrameWidth,
+      this.gestureFrameHeight,
+      0
+    ).then((result: LocalHandDetectResult) => {
+      this.applyLocalHandDetectResult(result)
+    }).catch((error: Object) => {
+      console.error(`[GesturePracticePage] local hand detect failed: ${JSON.stringify(error)}`)
+    }).finally(() => {
+      this.localDetecting = false
+    })
   }
 
   /**
@@ -586,7 +737,6 @@ struct GesturePracticePage {
     }
 
     this.enqueueFrame(firstFrame)
-    this.startCaptureLoop()
   }
 
   /**
@@ -710,11 +860,49 @@ struct GesturePracticePage {
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
 
+      Text(this.localPreviewStatusText)
+        .fontSize(13)
+        .fontColor('rgba(255,255,255,0.82)')
+
       Blank()
     }
     .width('100%')
     .padding({ left: 16, right: 16, top: 16, bottom: 12 })
     .backgroundColor('#FFFFFF')
+  }
+
+  @Builder
+  private buildLocalHandOverlay(): void {
+    Stack({ alignContent: Alignment.TopStart }) {
+      if (this.localHandBoxUi !== null) {
+        Column()
+          .width(this.localHandBoxUi.width)
+          .height(this.localHandBoxUi.height)
+          .border({
+            width: 2,
+            color: 'rgba(0,229,255,0.95)'
+          })
+          .backgroundColor('rgba(0,229,255,0.08)')
+          .position({
+            x: this.localHandBoxUi.left,
+            y: this.localHandBoxUi.top
+          })
+      }
+
+      ForEach(this.localHandPointsUi, (point: LocalHandKeyPoint, index: number) => {
+        Column()
+          .width(10)
+          .height(10)
+          .backgroundColor('#00E5FF')
+          .borderRadius(999)
+          .position({
+            x: point.x - 5,
+            y: point.y - 5
+          })
+      }, (point: LocalHandKeyPoint, index: number) => `${index}-${point.x}-${point.y}`)
+    }
+    .width('100%')
+    .height('100%')
   }
 
   /**
@@ -738,7 +926,7 @@ struct GesturePracticePage {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
-
+      this.buildLocalHandOverlay()
       // HUD 悬浮层
       Column() {
         // 顶部区域
