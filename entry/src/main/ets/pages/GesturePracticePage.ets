@@ -11,6 +11,10 @@ import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureWsApi } from '../api/GestureWsApi'
 import { GestureWsResultMessage } from '../model/GestureWsModels'
 
+import { LocalHandDetectResult, LocalHandKeyPoint, LocalHandRect } from '../model/LocalHandModels'
+import { LocalHandDetectService } from '../service/LocalHandDetectService'
+
+
 @Entry
 @Component
 struct GesturePracticePage {
@@ -400,6 +404,8 @@ struct GesturePracticePage {
       this.currentPreviewOutput.on('frameStart', () => {
         this.previewStarted = true
         this.cameraStatusText = '预览已启动'
+        void this.updateOverlaySize()
+        this.startCaptureLoop()
       })
 
       this.currentPreviewOutput.on('error', (previewError: BusinessError) => {
@@ -495,7 +501,7 @@ struct GesturePracticePage {
   }
 
   private async captureAndSendLatestFrame(): Promise<void> {
-    if (!this.isRecognizing || !this.surfaceId || this.hasRecognitionSucceeded) {
+    if (!this.surfaceId || !this.previewStarted) {
       return
     }
 
@@ -511,9 +517,15 @@ struct GesturePracticePage {
         return
       }
 
-      this.enqueueFrame(jpegBytes)
+      // 先跑本地检测，不依赖识别按钮
+      this.tryRunLocalHandDetection(jpegBytes)
+
+      // 再决定是否发给后端识别
+      if (this.isRecognizing && !this.hasRecognitionSucceeded) {
+        this.enqueueFrame(jpegBytes)
+      }
     } catch (error) {
-      console.error(`[GesturePracticePage] capture loop error: ${JSON.stringify(error)}`)
+      console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
     } finally {
       this.captureInProgress = false
     }
@@ -609,7 +621,6 @@ struct GesturePracticePage {
     }
 
     this.enqueueFrame(firstFrame)
-    this.startCaptureLoop()
   }
 
   private async stopGestureRecognition(preserveStatus: boolean = false): Promise<void> {
@@ -716,6 +727,10 @@ struct GesturePracticePage {
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
+
+      Text(this.localPreviewStatusText)
+        .fontSize(13)
+        .fontColor('rgba(255,255,255,0.82)')
 
       Blank()
     }
