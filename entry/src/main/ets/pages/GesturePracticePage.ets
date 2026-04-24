@@ -11,9 +11,6 @@ import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureWsApi } from '../api/GestureWsApi'
 import { GestureWsResultMessage } from '../model/GestureWsModels'
 
-import { LocalHandDetectResult, LocalHandKeyPoint, LocalHandRect } from '../model/LocalHandModels'
-import { LocalHandDetectService } from '../service/LocalHandDetectService'
-
 
 @Entry
 @Component
@@ -54,7 +51,21 @@ struct GesturePracticePage {
   private gestureWsApi: GestureWsApi = new GestureWsApi()
 
   private isFrameSending: boolean = false
-  private readonly frameSendIntervalMs: number = 90
+
+  /**
+   * 手势识别帧发送间隔。
+   *
+   * 100ms 对应 10FPS。
+   * 需要与训练采集 FPS、模型窗口 FPS 保持一致。
+   */
+  private readonly frameSendIntervalMs: number = 100
+
+  /**
+   * 上报给识别服务的帧率。
+   *
+   * 当前统一为 10FPS，30 帧对应 3 秒动作窗口。
+   */
+  private readonly gestureFrameFps: number = 10
 
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
@@ -62,7 +73,7 @@ struct GesturePracticePage {
 
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
-  private readonly gestureFrameFps: number = 10
+
   private readonly jpegQuality: number = 80
 
   aboutToAppear(): void {
@@ -404,7 +415,6 @@ struct GesturePracticePage {
       this.currentPreviewOutput.on('frameStart', () => {
         this.previewStarted = true
         this.cameraStatusText = '预览已启动'
-        void this.updateOverlaySize()
         this.startCaptureLoop()
       })
 
@@ -517,10 +527,7 @@ struct GesturePracticePage {
         return
       }
 
-      // 先跑本地检测，不依赖识别按钮
-      this.tryRunLocalHandDetection(jpegBytes)
-
-      // 再决定是否发给后端识别
+      // 只在识别状态下把当前帧发送给 Python WebSocket 识别服务
       if (this.isRecognizing && !this.hasRecognitionSucceeded) {
         this.enqueueFrame(jpegBytes)
       }
@@ -727,10 +734,6 @@ struct GesturePracticePage {
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
-
-      Text(this.localPreviewStatusText)
-        .fontSize(13)
-        .fontColor('rgba(255,255,255,0.82)')
 
       Blank()
     }
