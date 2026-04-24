@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Avatar</title>
+
+  <link rel="stylesheet" href="./cwasa.css" />
+  <link rel="stylesheet" href="./cwapp.css" />
+  <script src="./allcsa.js"></script>
+  <script src="./legcsa.js"></script>
+  <script src="./split-grid.js"></script>
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      box-sizing: border-box;
+      padding: 0;
+    }
+
+    .avatar-shell {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .CWASAAvatar.av0 {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      margin: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .CWASAAvatar.av0 .divAv.av0 {
+      width: 100%;
+      height: 100%;
+      border: 0 !important;
+      border-radius: 0 !important;
+      overflow: hidden;
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+
+    .CWASAAvatar.av0 .canvasAv.av0 {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      border: 0 !important;
+      background: transparent !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    .divCtrlPanel,
+    .CWASAGUI,
+    .CWASASpeed,
+    .CWASASiGMLURL,
+    .CWASASiGMLText,
+    .CWASAPlay,
+    .CWASAPlayExtra,
+    .CWASAFrames,
+    .CWASAProgress,
+    .CWASAStatus,
+    .avTable {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+<div class="avatar-shell">
+  <div class="CWASAAvatar av0"></div>
+</div>
+
+<script>
+  const playerState = {
+    sigmlUrl: '',
+    cwaBase: 'http://192.168.43.6:9000/cwasa-static/runtime/',
+    sigmlBase: 'http://192.168.43.6:9000/cwasa-static/sigml/demo/',
+    avJARBase: 'http://192.168.43.6:9000/cwasa-static/avatar/avatars/',
+    initSiGMLURL: '',
+    initialized: false
+  };
+
+  function initCWASA() {
+    if (playerState.initialized) {
+      return;
+    }
+
+    CWASA.init({
+      useCwaConfig: false,
+      useClientConfig: false,
+      cwaBase: playerState.cwaBase,
+      sigmlBase: playerState.sigmlBase,
+      avJARBase: playerState.avJARBase,
+      useAvatarJARs: true,
+      avs: ['anna', 'marc', 'francoise'],
+      avSettings: [{
+        width: 640,
+        height: 480,
+        initAv: 'anna',
+        avList: ['anna', 'marc', 'francoise'],
+        allowSiGMLText: false,
+        initSiGMLURL: playerState.initSiGMLURL
+      }]
+    });
+
+    playerState.initialized = true;
+  }
+
+  function setAvatarConfig(config) {
+    if (!config) {
+      return;
+    }
+
+    Object.assign(playerState, config);
+    initCWASA();
+  }
+
+  function playCurrentSign() {
+    if (!playerState.initialized) {
+      initCWASA();
+    }
+
+    if (!playerState.sigmlUrl) {
+      return;
+    }
+
+    CWASA.playSiGMLURL(playerState.sigmlUrl, 0);
+  }
+
+  function replayCurrentSign() {
+    if (!playerState.initialized) {
+      initCWASA();
+    }
+
+    CWASA.stopSiGML(0);
+
+    if (!playerState.sigmlUrl) {
+      return;
+    }
+
+    setTimeout(() => {
+      CWASA.playSiGMLURL(playerState.sigmlUrl, 0);
+    }, 120);
+  }
+
+  function stopCurrentSign() {
+    if (!playerState.initialized) {
+      return;
+    }
+
+    CWASA.stopSiGML(0);
+  }
+
+  window.setAvatarConfig = setAvatarConfig;
+  window.playCurrentSign = playCurrentSign;
+  window.replayCurrentSign = replayCurrentSign;
+  window.stopCurrentSign = stopCurrentSign;
+
+  window.onload = function () {
+    initCWASA();
+  };
+</script>
+</body>
+</html>

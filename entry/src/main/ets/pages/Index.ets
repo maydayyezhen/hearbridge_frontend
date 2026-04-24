@@ -1,7 +1,16 @@
-import { router } from '@kit.ArkUI'
 import { CategoryDto } from '../model/ApiModels'
 import { GestureApi } from '../api/GestureApi'
-import { GestureListPageParams } from '../model/GestureModels'
+import { HomeRootTab } from '../components/root/HomeRootTab'
+import { TrainingRootTab } from '../components/root/TrainingRootTab'
+import { MineRootTab } from '../components/root/MineRootTab'
+import common from '@ohos.app.ability.common'
+import { restoreAuthState } from '../common/auth/AuthStorage'
+
+const PAGE_BG: string = '#F5F7FB'
+const PRIMARY: string = '#2D6CDF'
+const PRIMARY_SOFT: string = '#EAF1FF'
+const TEXT_ACTIVE: string = '#1D4ED8'
+const TEXT_INACTIVE: string = '#8A94A6'
 
 @Entry
 @Component
@@ -9,9 +18,17 @@ struct Index {
   @State categoryList: CategoryDto[] = []
   @State loading: boolean = false
   @State errorText: string = ''
+  @State currentTabIndex: number = 0
+
+  private tabsController: TabsController = new TabsController()
 
   aboutToAppear(): void {
-    this.loadCategories()
+    void restoreAuthState(this.getAbilityContext())
+    void this.loadCategories()
+  }
+
+  private getAbilityContext(): common.BaseContext {
+    return this.getUIContext().getHostContext() as common.BaseContext
   }
 
   private async loadCategories(): Promise<void> {
@@ -20,7 +37,7 @@ struct Index {
 
     try {
       this.categoryList = await GestureApi.getCategories()
-      console.error(`分类数量：${this.categoryList.length}`)
+      console.info(`[Index] category count=${this.categoryList.length}`)
     } catch (err) {
       this.errorText = `分类加载失败：${JSON.stringify(err)}`
       console.error(this.errorText)
@@ -29,126 +46,88 @@ struct Index {
     }
   }
 
-  private goToGestureList(item: CategoryDto): void {
+  private switchToTab(index: number): void {
+    this.currentTabIndex = index
     try {
-      let params: GestureListPageParams = new GestureListPageParams(item.id, item.name)
-      router.pushUrl({
-        url: 'pages/GestureListPage',
-        params: params
-      }).catch((err: Object) => {
-        console.error(`跳转手势列表页失败：${JSON.stringify(err)}`)
-      })
+      this.tabsController.changeIndex(index)
     } catch (err) {
-      console.error(`跳转手势列表页异常：${JSON.stringify(err)}`)
+      console.error(`[Index] switch tab failed: ${JSON.stringify(err)}`)
     }
   }
 
   @Builder
-  private buildTopBar(): void {
-    Row() {
-      Text('手势分类')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
+  private buildTabItem(index: number, label: string, icon: Resource, selectedIcon: Resource): void {
+    Column({ space: 6 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Row() {}
+          .width(34)
+          .height(34)
+          .borderRadius(17)
+          .backgroundColor(this.currentTabIndex === index ? PRIMARY_SOFT : 'transparent')
 
-      Blank()
-    }
-    .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 12 })
-    .backgroundColor('#FFFFFF')
-  }
-
-  @Builder
-  private buildCategoryItem(item: CategoryDto): void {
-    Row() {
-      Column({ space: 6 }) {
-        Text(item.name)
-          .fontSize(22)
-          .fontWeight(FontWeight.Medium)
-
-        Text(`logo: ${item.logo}`)
-          .fontSize(14)
-          .fontColor('#888888')
+        SymbolGlyph(this.currentTabIndex === index ? selectedIcon : icon)
+          .fontSize(19)
+          .fontColor(this.currentTabIndex === index ? [PRIMARY] : ['#8A94A6'])
       }
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start)
+      .width(34)
+      .height(34)
 
-      Blank()
-
-      Text('进入')
-        .fontSize(16)
-        .fontColor('#3F7BFF')
+      Text(label)
+        .fontSize(11)
+        .fontWeight(this.currentTabIndex === index ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.currentTabIndex === index ? TEXT_ACTIVE : TEXT_INACTIVE)
     }
     .width('100%')
-    .padding(16)
-    .backgroundColor('#F7F8FA')
-    .borderRadius(16)
-    .justifyContent(FlexAlign.SpaceBetween)
-    .onClick(() => {
-      this.goToGestureList(item)
-    })
+    .height(58)
+    .justifyContent(FlexAlign.Center)
   }
 
   build() {
     Column() {
-      this.buildTopBar()
+      Tabs({
+        barPosition: BarPosition.End,
+        controller: this.tabsController
+      }) {
+        TabContent() {
+          HomeRootTab({
+            categories: this.categoryList,
+            loading: this.loading,
+            errorText: this.errorText,
+            onOpenTrainingTab: (): void => {
+              this.switchToTab(1)
+            }
+          })
+        }
+          .tabBar(this.buildTabItem(0, '首页', $r('sys.symbol.house'), $r('sys.symbol.house_fill')))
 
-      if (this.loading) {
-        Column() {
-          Text('加载中...')
-            .fontSize(18)
+        TabContent() {
+          TrainingRootTab({
+            categories: this.categoryList,
+            loading: this.loading,
+            errorText: this.errorText
+          })
         }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else if (this.errorText !== '') {
-        Column() {
-          Text(this.errorText)
-            .fontSize(16)
-            .fontColor(Color.Red)
+          .tabBar(this.buildTabItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill')))
+
+        TabContent() {
+          MineRootTab({
+            categoryCount: this.categoryList.length
+          })
         }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else if (this.categoryList.length === 0) {
-        Column() {
-          Text('当前没有分类数据')
-            .fontSize(18)
-            .fontColor('#666666')
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else {
-        List({ space: 16 }) {
-          ForEach(
-            this.categoryList,
-            (item: CategoryDto) => {
-              ListItem() {
-                this.buildCategoryItem(item)
-              }
-            },
-            (item: CategoryDto) => item.id.toString()
-          )
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding({ left: 16, right: 16, top: 16, bottom: 24 })
-        .alignListItem(ListItemAlign.Start)
-        .edgeEffect(EdgeEffect.None)
-        .scrollBar(BarState.Off)
-        .backgroundColor('#FFFFFF')
+          .tabBar(this.buildTabItem(2, '我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill')))
       }
+      .vertical(false)
+      .barMode(BarMode.Fixed)
+      .backgroundColor('#FFFFFF')
+      .onChange((index: number) => {
+        this.currentTabIndex = index
+      })
+      .width('100%')
+      .layoutWeight(1)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#FFFFFF')
-    .alignItems(HorizontalAlign.Start)
-    .justifyContent(FlexAlign.Start)
+    .backgroundColor(PAGE_BG)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

@@ -1,10 +1,12 @@
 import { router, window, display } from '@kit.ArkUI'
+import { webview } from '@kit.ArkWeb'
 import { common } from '@kit.AbilityKit'
 import { camera } from '@kit.CameraKit'
 import { image } from '@kit.ImageKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl'
 
+import { AppConfig } from '../common/constants/AppConfig'
 import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureWsApi } from '../api/GestureWsApi'
 import { GestureWsResultMessage } from '../model/GestureWsModels'
@@ -14,51 +16,46 @@ import { GestureWsResultMessage } from '../model/GestureWsModels'
 struct GesturePracticePage {
   @State gestureId: number = 0
   @State chineseName: string = ''
-  @State label: string = ''
+  @State resourceCode: string = ''
+  @State sigmlUrl: string = ''
+  @State coverUrl: string = ''
 
-  // 全屏相机层显示状态
   @State showCameraOverlay: boolean = false
-
-  // 相机预览相关状态
   @State surfaceId: string = ''
   @State cameraStatusText: string = '等待打开相机'
   @State previewStarted: boolean = false
 
-  // 悬浮层安全区内边距
   @State topSafeInsetVp: number = 0
   @State bottomSafeInsetVp: number = 0
 
-  // 识别提示状态
   @State recognitionStatusText: string = '点击开始识别'
   @State isRecognizing: boolean = false
   @State hasRecognitionSucceeded: boolean = false
 
-  // XComponent 控制器
-  private xComponentController: XComponentController = new XComponentController()
+  @State avatarStatusText: string = '数字人加载中'
+  @State avatarErrorText: string = ''
 
-  // 相机相关对象
+  private xComponentController: XComponentController = new XComponentController()
+  private avatarController: webview.WebviewController = new webview.WebviewController()
+  private avatarPageReady: boolean = false
+
   private cameraManager?: camera.CameraManager
   private currentCamera?: camera.CameraDevice
   private currentCameraInput?: camera.CameraInput
   private currentPreviewOutput?: camera.PreviewOutput
   private currentSession?: camera.PhotoSession
 
-  // 避免重复启动相机
   private isCameraStarting: boolean = false
 
-  // WebSocket 手势识别服务
   private gestureWsApi: GestureWsApi = new GestureWsApi()
 
-  // 帧发送节流
   private isFrameSending: boolean = false
   private readonly frameSendIntervalMs: number = 90
 
-  // 抓帧循环
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
   private pendingFrame: ArrayBuffer | null = null
 
-  // start 初始化消息里需要的尺寸信息
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
   private readonly gestureFrameFps: number = 10
@@ -72,49 +69,136 @@ struct GesturePracticePage {
     this.stopCaptureLoop()
     this.safeStopCamera()
     this.gestureWsApi.disconnect()
+    void this.stopAvatar()
+    this.avatarPageReady = false
   }
 
-  /**
-   * 读取路由参数
-   */
   private readParams(): void {
     try {
       const params = router.getParams() as GesturePracticePageParams
       if (params) {
-        this.gestureId = Number(params.gestureId)
+        this.gestureId = Number(params.resourceId)
         this.chineseName = String(params.chineseName)
-        this.label = String(params.label)
+        this.resourceCode = String(params.resourceCode)
+        this.sigmlUrl = String(params.sigmlUrl)
+        this.coverUrl = String(params.coverUrl)
+        this.persistRecentPractice()
       }
     } catch (err) {
       console.error(`读取训练页参数失败：${JSON.stringify(err)}`)
     }
   }
 
-  /**
-   * 返回上一页
-   */
+  private persistRecentPractice(): void {
+    AppStorage.setOrCreate('recent.practice.id', this.gestureId)
+    AppStorage.setOrCreate('recent.practice.code', this.resourceCode)
+    AppStorage.setOrCreate('recent.practice.name', this.chineseName === '' ? this.resourceCode : this.chineseName)
+    AppStorage.setOrCreate('recent.practice.sigmlUrl', this.sigmlUrl)
+    AppStorage.setOrCreate('recent.practice.coverUrl', this.coverUrl)
+  }
+
+  private getDisplayName(): string {
+    if (this.chineseName !== '') {
+      return this.chineseName
+    }
+    if (this.resourceCode !== '') {
+      return this.resourceCode
+    }
+    return '手语训练'
+  }
+
+  private getCodeLabel(): string {
+    return this.resourceCode === '' ? '未设置' : this.resourceCode
+  }
+
+  private buildAvatarBootstrapScript(playNow: boolean): string {
+    const payload = JSON.stringify({
+      sigmlUrl: this.sigmlUrl,
+      cwaBase: AppConfig.buildRuntimeBaseUrl(),
+      sigmlBase: AppConfig.buildDemoSigmlBaseUrl(),
+      avJARBase: AppConfig.buildAvatarJarBaseUrl()
+    })
+
+    const playScript = playNow ? "window.playCurrentSign && window.playCurrentSign();" : ''
+    return `window.setAvatarConfig && window.setAvatarConfig(${payload}); ${playScript} 'ok';`
+  }
+
+  private async syncAvatar(playNow: boolean): Promise<void> {
+    if (!this.avatarPageReady) {
+      this.avatarStatusText = '数字人画面还在加载'
+      return
+    }
+
+    if (this.sigmlUrl === '') {
+      this.avatarStatusText = '当前资源没有可播放的 SiGML 文件'
+      return
+    }
+
+    try {
+      await this.avatarController.runJavaScript(this.buildAvatarBootstrapScript(playNow))
+      this.avatarErrorText = ''
+      this.avatarStatusText = playNow ? '数字人正在播放' : '数字人已就绪'
+    } catch (err) {
+      this.avatarErrorText = `同步数字人配置失败：${JSON.stringify(err)}`
+      this.avatarStatusText = '数字人加载失败'
+      console.error(this.avatarErrorText)
+    }
+  }
+
+  private async playAvatar(): Promise<void> {
+    await this.syncAvatar(true)
+  }
+
+  private async replayAvatar(): Promise<void> {
+    if (!this.avatarPageReady) {
+      this.avatarStatusText = '数字人画面还在加载'
+      return
+    }
+
+    if (this.sigmlUrl === '') {
+      this.avatarStatusText = '当前资源没有可播放的 SiGML 文件'
+      return
+    }
+
+    try {
+      await this.avatarController.runJavaScript("window.replayCurrentSign && window.replayCurrentSign(); 'ok';")
+      this.avatarErrorText = ''
+      this.avatarStatusText = '数字人已重新播放'
+    } catch (err) {
+      this.avatarErrorText = `重播数字人失败：${JSON.stringify(err)}`
+      this.avatarStatusText = '数字人重播失败'
+      console.error(this.avatarErrorText)
+    }
+  }
+
+  private async stopAvatar(): Promise<void> {
+    if (!this.avatarPageReady) {
+      return
+    }
+
+    try {
+      await this.avatarController.runJavaScript("window.stopCurrentSign && window.stopCurrentSign(); 'ok';")
+    } catch (err) {
+      console.error(`停止数字人播放失败：${JSON.stringify(err)}`)
+    }
+  }
+
   private goBack(): void {
     try {
       router.back()
     } catch (err) {
-      console.error(`返回手势列表页失败：${JSON.stringify(err)}`)
+      console.error(`返回资源列表页失败：${JSON.stringify(err)}`)
     }
   }
 
-  /**
-   * 打开全屏相机层
-   */
   private async openCameraOverlay(): Promise<void> {
-    this.cameraStatusText = '等待创建预览面'
+    this.cameraStatusText = '等待创建预览画面'
     this.previewStarted = false
     this.resetRecognitionView()
     await this.updateWindowImmersive(true)
     this.showCameraOverlay = true
   }
 
-  /**
-   * 关闭全屏相机层
-   */
   private async closeCameraOverlay(): Promise<void> {
     await this.stopGestureRecognition(true)
     await this.safeStopCamera()
@@ -126,9 +210,6 @@ struct GesturePracticePage {
     await this.updateWindowImmersive(false)
   }
 
-  /**
-   * 运行时申请相机权限
-   */
   private async requestCameraPermission(): Promise<boolean> {
     const context = getContext(this) as common.UIAbilityContext
     const atManager = abilityAccessCtrl.createAtManager()
@@ -147,9 +228,6 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 切换窗口沉浸式布局，并同步读取上下安全区高度
-   */
   private async updateWindowImmersive(enable: boolean): Promise<void> {
     try {
       const context = getContext(this) as common.UIAbilityContext
@@ -174,31 +252,19 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 顶部悬浮区 padding
-   */
   private getOverlayTopPadding(): number {
     return (this.topSafeInsetVp > 0 ? this.topSafeInsetVp : 32) + 8
   }
 
-  /**
-   * 底部悬浮区 padding
-   */
   private getOverlayBottomPadding(): number {
     return (this.bottomSafeInsetVp > 0 ? this.bottomSafeInsetVp : 24) + 16
   }
 
-  /**
-   * 重置识别展示状态
-   */
   private resetRecognitionView(): void {
     this.recognitionStatusText = '点击开始识别'
     this.hasRecognitionSucceeded = false
   }
 
-  /**
-   * 主按钮文案
-   */
   private getPrimaryButtonText(): string {
     if (this.hasRecognitionSucceeded) {
       return '重新开始'
@@ -206,9 +272,6 @@ struct GesturePracticePage {
     return this.isRecognizing ? '停止识别' : '开始识别'
   }
 
-  /**
-   * 状态卡背景色
-   */
   private getStatusCardBackgroundColor(): string {
     if (this.hasRecognitionSucceeded) {
       return 'rgba(34,197,94,0.34)'
@@ -216,9 +279,6 @@ struct GesturePracticePage {
     return 'rgba(0,0,0,0.28)'
   }
 
-  /**
-   * 状态卡边框色
-   */
   private getStatusCardBorderColor(): string {
     if (this.hasRecognitionSucceeded) {
       return 'rgba(134,239,172,0.82)'
@@ -226,9 +286,6 @@ struct GesturePracticePage {
     return 'rgba(255,255,255,0.14)'
   }
 
-  /**
-   * 选择摄像头，优先前置
-   */
   private pickCameraDevice(cameraList: Array<camera.CameraDevice>): camera.CameraDevice | undefined {
     if (!cameraList || cameraList.length === 0) {
       return undefined
@@ -243,9 +300,6 @@ struct GesturePracticePage {
     return cameraList[0]
   }
 
-  /**
-   * 计算 profile 在竖屏显示下的宽高比（宽 / 高）
-   */
   private getPortraitRatioOfProfile(profile: camera.Profile): number {
     const width = profile.size.width
     const height = profile.size.height
@@ -254,9 +308,6 @@ struct GesturePracticePage {
     return shortSide / longSide
   }
 
-  /**
-   * 为显示流选择最接近屏幕比例的 profile
-   */
   private async pickBestPreviewProfile(profiles: Array<camera.Profile>): Promise<camera.Profile> {
     const context = getContext(this) as common.UIAbilityContext
     const win = await window.getLastWindow(context)
@@ -278,29 +329,23 @@ struct GesturePracticePage {
     return bestProfile
   }
 
-  /**
-   * XComponent 加载完成后获取 surfaceId 并启动相机
-   */
   private async handleSurfaceLoaded(): Promise<void> {
     try {
       this.surfaceId = this.xComponentController.getXComponentSurfaceId()
       await this.startRealCamera()
     } catch (error) {
       const err = error as BusinessError
-      this.cameraStatusText = `获取预览面失败：${err.code}`
+      this.cameraStatusText = `获取预览画面失败：${err.code}`
       console.error(`获取 surfaceId 失败：code=${err.code}, message=${err.message}`)
     }
   }
 
-  /**
-   * 启动真实相机
-   */
   private async startRealCamera(): Promise<void> {
     if (this.isCameraStarting) {
       return
     }
     if (!this.surfaceId) {
-      this.cameraStatusText = '预览面尚未就绪'
+      this.cameraStatusText = '预览画面尚未就绪'
       return
     }
 
@@ -383,9 +428,6 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 从预览 surface 抓一帧，并编码成 JPEG
-   */
   private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
     if (!this.surfaceId) {
       return null
@@ -433,9 +475,6 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 开始抓帧循环
-   */
   private startCaptureLoop(): void {
     this.stopCaptureLoop()
 
@@ -444,9 +483,6 @@ struct GesturePracticePage {
     }, this.frameSendIntervalMs)
   }
 
-  /**
-   * 停止抓帧循环
-   */
   private stopCaptureLoop(): void {
     if (this.captureTimerId >= 0) {
       clearInterval(this.captureTimerId)
@@ -458,9 +494,6 @@ struct GesturePracticePage {
     this.isFrameSending = false
   }
 
-  /**
-   * 抓取当前帧并入队
-   */
   private async captureAndSendLatestFrame(): Promise<void> {
     if (!this.isRecognizing || !this.surfaceId || this.hasRecognitionSucceeded) {
       return
@@ -486,17 +519,11 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 覆盖队列里的旧帧，只保留最新一帧
-   */
   private enqueueFrame(frame: ArrayBuffer): void {
     this.pendingFrame = frame
     void this.flushPendingFrame()
   }
 
-  /**
-   * 发送队列里的最新帧
-   */
   private async flushPendingFrame(): Promise<void> {
     if (this.isFrameSending || this.pendingFrame === null) {
       return
@@ -524,16 +551,13 @@ struct GesturePracticePage {
     }
   }
 
-  /**
-   * 开始识别
-   */
   private async startGestureRecognition(): Promise<void> {
     if (this.isRecognizing) {
       return
     }
 
     if (!this.previewStarted || !this.surfaceId) {
-      this.recognitionStatusText = '预览未就绪'
+      this.recognitionStatusText = '预览尚未就绪'
       return
     }
 
@@ -563,7 +587,6 @@ struct GesturePracticePage {
       return
     }
 
-    // 先抓一帧，确定 start 里要发的尺寸
     const firstFrame = await this.captureCurrentFrameAsJpeg()
     if (!firstFrame || this.gestureFrameWidth <= 0 || this.gestureFrameHeight <= 0) {
       this.isRecognizing = false
@@ -589,10 +612,6 @@ struct GesturePracticePage {
     this.startCaptureLoop()
   }
 
-  /**
-   * 停止识别
-   * @param preserveStatus 是否保留当前提示文案
-   */
   private async stopGestureRecognition(preserveStatus: boolean = false): Promise<void> {
     this.isRecognizing = false
     this.stopCaptureLoop()
@@ -604,9 +623,6 @@ struct GesturePracticePage {
     await this.gestureWsApi.disconnect()
   }
 
-  /**
-   * 识别成功后高亮并停止
-   */
   private async handleRecognitionSuccess(): Promise<void> {
     if (this.hasRecognitionSucceeded) {
       return
@@ -617,9 +633,6 @@ struct GesturePracticePage {
     await this.stopGestureRecognition(true)
   }
 
-  /**
-   * 处理识别服务返回结果
-   */
   private handleGestureWsResult(result: GestureWsResultMessage): void {
     if (this.hasRecognitionSucceeded) {
       return
@@ -639,10 +652,10 @@ struct GesturePracticePage {
 
     if (result.status === 'predicted') {
       const recognizedLabel = result.label && result.label.length > 0 ? result.label : '未知动作'
-      if (result.label === this.label) {
+      if (result.label === this.resourceCode) {
         void this.handleRecognitionSuccess()
       } else {
-        this.recognitionStatusText = `当前是「${recognizedLabel}」，不是目标动作`
+        this.recognitionStatusText = `当前是“${recognizedLabel}”，不是目标动作`
       }
       return
     }
@@ -650,9 +663,6 @@ struct GesturePracticePage {
     this.recognitionStatusText = '等待识别结果'
   }
 
-  /**
-   * 安全停止相机
-   */
   private async safeStopCamera(): Promise<void> {
     try {
       if (this.currentSession) {
@@ -689,9 +699,6 @@ struct GesturePracticePage {
     this.previewStarted = false
   }
 
-  /**
-   * 顶部栏
-   */
   @Builder
   private buildTopBar(): void {
     Row() {
@@ -705,7 +712,7 @@ struct GesturePracticePage {
           this.goBack()
         })
 
-      Text('手势训练')
+      Text('手语训练')
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
@@ -717,13 +724,152 @@ struct GesturePracticePage {
     .backgroundColor('#FFFFFF')
   }
 
-  /**
-   * 全屏相机层
-   */
+  @Builder
+  private buildReferenceCard(): void {
+    Row({ space: 16 }) {
+      if (this.coverUrl !== '') {
+        Image(this.coverUrl)
+          .width(120)
+          .height(120)
+          .borderRadius(16)
+          .objectFit(ImageFit.Cover)
+          .backgroundColor('#EEF2F6')
+      } else {
+        Stack({ alignContent: Alignment.Center }) {
+          Text(this.resourceCode === '' ? 'SIGN' : this.resourceCode)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#667085')
+            .textAlign(TextAlign.Center)
+        }
+        .width(120)
+        .height(120)
+        .borderRadius(16)
+        .backgroundColor('#EEF2F6')
+      }
+
+      Column({ space: 10 }) {
+        Text(this.getDisplayName())
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        Text(`目标编码：${this.getCodeLabel()}`)
+          .fontSize(15)
+          .fontColor('#667085')
+
+        if (this.sigmlUrl !== '') {
+          Text('资源文件已就绪')
+            .fontSize(14)
+            .fontColor('#12B76A')
+        }
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Center)
+    }
+    .width('100%')
+    .padding(18)
+    .backgroundColor('#F7F8FA')
+    .borderRadius(20)
+  }
+
+  @Builder
+  private buildAvatarCard(): void {
+    Column({ space: 18 }) {
+      Row({ space: 12 }) {
+        Column({ space: 6 }) {
+          Text('数字人演示')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+
+          Text(this.avatarStatusText)
+            .fontSize(14)
+            .fontColor('#667085')
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Button('播放')
+          .height(42)
+          .padding({ left: 20, right: 20 })
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .backgroundColor('#2D6CDF')
+          .fontColor('#FFFFFF')
+          .borderRadius(21)
+          .onClick(() => {
+            void this.playAvatar()
+          })
+
+        Button('重播')
+          .height(42)
+          .padding({ left: 20, right: 20 })
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .backgroundColor('#0F172A')
+          .fontColor('#FFFFFF')
+          .borderRadius(21)
+          .onClick(() => {
+            void this.replayAvatar()
+          })
+      }
+      .width('100%')
+
+      Stack({ alignContent: Alignment.Center }) {
+        Web({
+          src: $rawfile('sign-avatar/index.html'),
+          controller: this.avatarController
+        })
+          .javaScriptAccess(true)
+          .domStorageAccess(true)
+          .fileAccess(true)
+          .onlineImageAccess(true)
+          .imageAccess(true)
+          .mixedMode(MixedMode.All)
+          .onPageEnd((_event) => {
+            this.avatarPageReady = true
+            this.avatarStatusText = this.sigmlUrl === '' ? '当前资源没有可播放的 SiGML 文件' : '数字人已就绪'
+            void this.syncAvatar(false)
+          })
+          .width('100%')
+          .height(360)
+
+        if (this.sigmlUrl === '') {
+          Text('当前资源没有可播放的 SiGML 文件')
+            .fontSize(16)
+            .fontColor('#475467')
+            .padding(16)
+        }
+      }
+      .width('100%')
+      .height(360)
+      .padding(0)
+      .borderRadius(28)
+      .clip(true)
+      .backgroundColor('#E9EEF9')
+      .border({
+        width: 1,
+        color: 'rgba(148,163,184,0.20)'
+      })
+
+      if (this.avatarErrorText !== '') {
+        Text(this.avatarErrorText)
+          .fontSize(13)
+          .fontColor('#D92D20')
+          .width('100%')
+      }
+    }
+    .width('100%')
+    .padding(20)
+    .backgroundColor('#F7F8FA')
+    .borderRadius(24)
+  }
+
   @Builder
   private buildCameraOverlay(): void {
     Stack({ alignContent: Alignment.TopStart }) {
-      // 最底层：全屏相机预览
       XComponent({
         id: 'gesture-camera-preview',
         type: XComponentType.SURFACE,
@@ -739,12 +885,10 @@ struct GesturePracticePage {
         .height('100%')
         .backgroundColor('#000000')
 
-      // HUD 悬浮层
       Column() {
-        // 顶部区域
         Column({ space: 10 }) {
           Row({ space: 12 }) {
-            Text(this.chineseName ? this.chineseName : '手势训练')
+            Text(this.getDisplayName())
               .fontSize(22)
               .fontWeight(FontWeight.Bold)
               .fontColor('#FFFFFF')
@@ -767,10 +911,18 @@ struct GesturePracticePage {
           .width('100%')
 
           Column({ space: 10 }) {
-            Text(`目标动作：${this.label}`)
+            Text(`目标动作：${this.getDisplayName()}`)
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
               .fontColor('#FFFFFF')
+
+            Text(`目标编码：${this.getCodeLabel()}`)
+              .fontSize(14)
+              .fontColor('rgba(255,255,255,0.82)')
+
+            Text(`相机状态：${this.cameraStatusText}`)
+              .fontSize(14)
+              .fontColor('rgba(255,255,255,0.82)')
 
             Text(this.recognitionStatusText)
               .fontSize(15)
@@ -797,7 +949,6 @@ struct GesturePracticePage {
 
         Blank()
 
-        // 底部区域
         Column() {
           Button(this.getPrimaryButtonText())
             .width('100%')
@@ -841,32 +992,37 @@ struct GesturePracticePage {
 
   build() {
     Stack() {
-      // 正常页面
       Column() {
         this.buildTopBar()
 
-        Column() {
-          Button('打开相机')
-            .width('72%')
-            .height(52)
-            .fontSize(18)
-            .fontWeight(FontWeight.Medium)
-            .borderRadius(26)
-            .onClick(async () => {
-              await this.openCameraOverlay()
-            })
+        Scroll() {
+          Column({ space: 20 }) {
+            this.buildReferenceCard()
+            this.buildAvatarCard()
+
+            Button('打开相机')
+              .width('100%')
+              .height(54)
+              .fontSize(18)
+              .fontWeight(FontWeight.Medium)
+              .borderRadius(27)
+              .backgroundColor('#111827')
+              .fontColor('#FFFFFF')
+              .onClick(async () => {
+                await this.openCameraOverlay()
+              })
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: 24 })
         }
         .width('100%')
         .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
         .backgroundColor('#FFFFFF')
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#FFFFFF')
 
-      // 全屏相机层
       if (this.showCameraOverlay) {
         this.buildCameraOverlay()
       }

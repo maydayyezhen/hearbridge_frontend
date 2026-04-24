@@ -6,7 +6,7 @@ import { GestureListPageParams, GesturePracticePageParams } from '../model/Gestu
 @Entry
 @Component
 struct GestureListPage {
-  @State categoryId: number = 0
+  @State categoryCode: string = ''
   @State categoryName: string = ''
   @State gestureList: GestureItemDto[] = []
   @State loading: boolean = false
@@ -14,18 +14,18 @@ struct GestureListPage {
 
   aboutToAppear(): void {
     this.readParams()
-    this.loadGestureItems()
+    void this.loadGestureItems()
   }
 
   private readParams(): void {
     try {
-      let params = router.getParams() as GestureListPageParams
+      const params = router.getParams() as GestureListPageParams
       if (params) {
-        this.categoryId = Number(params.categoryId)
+        this.categoryCode = String(params.categoryCode)
         this.categoryName = String(params.categoryName)
       }
     } catch (err) {
-      console.error(`读取手势列表页参数失败：${JSON.stringify(err)}`)
+      console.error(`读取资源列表页参数失败：${JSON.stringify(err)}`)
     }
   }
 
@@ -34,10 +34,10 @@ struct GestureListPage {
     this.errorText = ''
 
     try {
-      this.gestureList = await GestureApi.getGestureItems(this.categoryId)
-      console.error(`手势数量：${this.gestureList.length}`)
+      this.gestureList = await GestureApi.getGestureItems(this.categoryCode)
+      console.info(`[GestureListPage] resource count=${this.gestureList.length}`)
     } catch (err) {
-      this.errorText = `手势列表加载失败：${JSON.stringify(err)}`
+      this.errorText = `资源列表加载失败：${JSON.stringify(err)}`
       console.error(this.errorText)
     } finally {
       this.loading = false
@@ -52,12 +52,23 @@ struct GestureListPage {
     }
   }
 
+  private persistRecentPractice(item: GestureItemDto): void {
+    AppStorage.setOrCreate('recent.practice.id', item.id)
+    AppStorage.setOrCreate('recent.practice.code', item.code)
+    AppStorage.setOrCreate('recent.practice.name', item.nameZh === '' ? item.code : item.nameZh)
+    AppStorage.setOrCreate('recent.practice.sigmlUrl', item.sigmlUrl)
+    AppStorage.setOrCreate('recent.practice.coverUrl', item.coverUrl)
+  }
+
   private goToPractice(item: GestureItemDto): void {
     try {
-      let params: GesturePracticePageParams = new GesturePracticePageParams(
+      this.persistRecentPractice(item)
+      const params: GesturePracticePageParams = new GesturePracticePageParams(
         item.id,
-        item.chineseName,
-        item.label
+        item.code,
+        item.nameZh === '' ? item.code : item.nameZh,
+        item.sigmlUrl,
+        item.coverUrl
       )
       router.pushUrl({
         url: 'pages/GesturePracticePage',
@@ -80,7 +91,7 @@ struct GestureListPage {
           this.goBack()
         })
 
-      Text(this.categoryName === '' ? '手势列表' : this.categoryName)
+      Text(this.categoryName === '' ? '资源列表' : this.categoryName)
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
@@ -93,23 +104,53 @@ struct GestureListPage {
   }
 
   @Builder
+  private buildCover(item: GestureItemDto): void {
+    if (item.coverUrl !== '') {
+      Image(item.coverUrl)
+        .width(72)
+        .height(72)
+        .borderRadius(12)
+        .objectFit(ImageFit.Cover)
+        .backgroundColor('#EDEFF2')
+    } else {
+      Stack({ alignContent: Alignment.Center }) {
+        Text(item.code)
+          .fontSize(12)
+          .fontColor('#666666')
+          .textAlign(TextAlign.Center)
+      }
+      .width(72)
+      .height(72)
+      .borderRadius(12)
+      .backgroundColor('#EDEFF2')
+    }
+  }
+
+  @Builder
   private buildGestureItem(item: GestureItemDto): void {
-    Row() {
+    Row({ space: 14 }) {
+      this.buildCover(item)
+
       Column({ space: 6 }) {
-        Text(item.chineseName)
+        Text(item.nameZh === '' ? item.code : item.nameZh)
           .fontSize(22)
           .fontWeight(FontWeight.Medium)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Text(`label: ${item.label}`)
+        Text(`编码：${item.code}`)
           .fontSize(14)
           .fontColor('#888888')
+
+        Text(`分类：${item.categoryCode}`)
+          .fontSize(13)
+          .fontColor('#AAAAAA')
       }
+      .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start)
+      .justifyContent(FlexAlign.Center)
 
-      Blank()
-
-      Text('训练')
+      Text('练习')
         .fontSize(16)
         .fontColor('#3F7BFF')
     }
@@ -117,7 +158,7 @@ struct GestureListPage {
     .padding(16)
     .backgroundColor('#F7F8FA')
     .borderRadius(16)
-    .justifyContent(FlexAlign.SpaceBetween)
+    .alignItems(VerticalAlign.Center)
     .onClick(() => {
       this.goToPractice(item)
     })
@@ -150,11 +191,11 @@ struct GestureListPage {
         .justifyContent(FlexAlign.Start)
       } else if (this.gestureList.length === 0) {
         Column({ space: 8 }) {
-          Text('当前分类下还没有手势数据')
+          Text('当前分类下还没有资源数据')
             .fontSize(18)
             .fontColor('#666666')
 
-          Text('后面可以继续补这个分类的数据')
+          Text('后续可以继续补充这个分类的手语资源')
             .fontSize(14)
             .fontColor('#999999')
         }

@@ -10,11 +10,15 @@
     },
     {
       "name": "EntryAbility_label",
-      "value": "label"
+      "value": "HearBridge"
     },
     {
       "name": "camera_permission_reason",
       "value": "用于手势训练时打开摄像头进行实时预览"
+    },
+    {
+      "name": "read_imagevideo_permission_reason",
+      "value": "用于从相册选择头像图片"
     }
   ]
 }
