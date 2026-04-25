@@ -96,6 +96,18 @@ struct GestureListPage {
         .fontWeight(FontWeight.Bold)
         .margin({ left: 16 })
 
+      Button('采集')
+        .fontSize(15)
+        .height(38)
+        .margin({ right: 8 })
+        .onClick(() => {
+          router.pushUrl({
+            url: 'pages/DatasetCollectPage'
+          }).catch((err: Object) => {
+            console.error(`跳转采集页失败：${JSON.stringify(err)}`)
+          })
+        })
+
       Blank()
     }
     .width('100%')

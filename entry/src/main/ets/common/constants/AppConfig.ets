@@ -7,6 +7,8 @@ export class AppConfig {
 
   static readonly GESTURE_WS_URL: string = 'ws://192.168.43.6:8000/ws/gesture'
 
+  static readonly DATASET_WS_URL: string = 'ws://192.168.43.6:8000/ws/dataset'
+
   static buildMinioBucketBaseUrl(): string {
     return `${AppConfig.MINIO_BASE_URL}/${AppConfig.MINIO_BUCKET}`
   }

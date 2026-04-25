@@ -11,6 +11,9 @@ import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureWsApi } from '../api/GestureWsApi'
 import { GestureWsResultMessage } from '../model/GestureWsModels'
 
+import { DatasetWsApi } from '../api/DatasetWsApi'
+import { DatasetWsStatusMessage } from '../model/DatasetWsModels'
+
 
 @Entry
 @Component
@@ -33,6 +36,12 @@ struct GesturePracticePage {
   @State isRecognizing: boolean = false
   @State hasRecognitionSucceeded: boolean = false
 
+  @State datasetStatusText: string = '可在查看数字人后采集当前动作样本'
+  @State isDatasetCollecting: boolean = false
+  @State datasetValidFrames: number = 0
+  @State datasetWindowSize: number = 30
+  @State datasetCountdownText: string = ''
+
   @State avatarStatusText: string = '数字人加载中'
   @State avatarErrorText: string = ''
 
@@ -49,6 +58,8 @@ struct GesturePracticePage {
   private isCameraStarting: boolean = false
 
   private gestureWsApi: GestureWsApi = new GestureWsApi()
+
+  private datasetWsApi: DatasetWsApi = new DatasetWsApi()
 
   private isFrameSending: boolean = false
 
@@ -83,6 +94,18 @@ struct GesturePracticePage {
 
   private readonly jpegQuality: number = 80
 
+  /** raw dataset 采集帧率。 */
+  private readonly datasetFrameFps: number = 10
+
+  /** raw dataset 单个样本窗口大小。 */
+  private readonly datasetWindowFrameCount: number = 30
+
+  /** 点击采集后给用户准备动作的倒计时秒数。 */
+  private readonly datasetPrepareSeconds: number = 3
+
+  /** raw dataset 采集倒计时开始时间戳。 */
+  private datasetPrepareStartTime: number = 0
+
   aboutToAppear(): void {
     this.readParams()
   }
@@ -91,6 +114,7 @@ struct GesturePracticePage {
     this.stopCaptureLoop()
     this.safeStopCamera()
     this.gestureWsApi.disconnect()
+    this.datasetWsApi.disconnect()
     void this.stopAvatar()
     this.avatarPageReady = false
   }
@@ -223,6 +247,7 @@ struct GesturePracticePage {
 
   private async closeCameraOverlay(): Promise<void> {
     await this.stopGestureRecognition(true)
+    await this.stopDatasetCollect(true)
     await this.safeStopCamera()
     this.showCameraOverlay = false
     this.surfaceId = ''
@@ -283,7 +308,7 @@ struct GesturePracticePage {
   }
 
   private resetRecognitionView(): void {
-    this.recognitionStatusText = '请将上半身与手势动作保持在有效区内'
+    this.recognitionStatusText = '请露出双肩，并让手势动作保持在画面内'
     this.hasRecognitionSucceeded = false
   }
 
@@ -516,6 +541,7 @@ struct GesturePracticePage {
     this.pendingFrame = null
     this.captureInProgress = false
     this.isFrameSending = false
+    this.datasetCountdownText = ''
   }
 
   private async captureAndSendLatestFrame(): Promise<void> {
@@ -535,9 +561,14 @@ struct GesturePracticePage {
         return
       }
 
-      // 只在识别状态下把当前帧发送给 Python WebSocket 识别服务
+      // 识别链路：发送给 /ws/gesture
       if (this.isRecognizing && !this.hasRecognitionSucceeded) {
         this.enqueueFrame(jpegBytes)
+      }
+
+      // 采集链路：发送给 /ws/dataset
+      if (this.isDatasetCollecting) {
+        await this.handleDatasetFrame(jpegBytes)
       }
     } catch (error) {
       console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
@@ -545,6 +576,149 @@ struct GesturePracticePage {
       this.captureInProgress = false
     }
   }
+
+  private async handleDatasetFrame(jpegBytes: ArrayBuffer): Promise<void> {
+    if (!this.isDatasetCollecting) {
+      return
+    }
+
+    const elapsedMs = Date.now() - this.datasetPrepareStartTime
+    const remainingMs = this.datasetPrepareSeconds * 1000 - elapsedMs
+
+    if (remainingMs > 0) {
+      const remainingSecond = Math.ceil(remainingMs / 1000)
+      this.datasetCountdownText = `${remainingSecond}`
+      this.datasetStatusText = `准备采集：${remainingSecond} 秒后开始`
+      return
+    }
+
+    this.datasetCountdownText = ''
+
+    if (!this.datasetWsApi.isConnected()) {
+      return
+    }
+
+    await this.datasetWsApi.sendFrame(jpegBytes)
+  }
+
+  private async startDatasetCollect(): Promise<void> {
+    if (this.isDatasetCollecting) {
+      return
+    }
+
+    if (this.isRecognizing) {
+      this.datasetStatusText = '请先停止识别，再采集样本'
+      return
+    }
+
+    if (!this.previewStarted || !this.surfaceId) {
+      this.datasetStatusText = '相机预览尚未就绪'
+      return
+    }
+
+    if (this.resourceCode === '') {
+      this.datasetStatusText = '当前动作编码为空，无法采集'
+      return
+    }
+
+    this.datasetValidFrames = 0
+    this.datasetWindowSize = this.datasetWindowFrameCount
+    this.datasetCountdownText = ''
+    this.datasetPrepareStartTime = Date.now()
+    this.isDatasetCollecting = true
+    this.datasetStatusText = `准备采集当前动作：${this.resourceCode}`
+
+    const connected = await this.datasetWsApi.connect(
+      (message: DatasetWsStatusMessage) => {
+        this.handleDatasetStatus(message)
+      },
+      (message: string) => {
+        this.datasetStatusText = message
+      },
+      () => {
+        this.isDatasetCollecting = false
+        this.datasetCountdownText = ''
+        this.datasetStatusText = '采集连接已关闭'
+      }
+    )
+
+    if (!connected) {
+      this.isDatasetCollecting = false
+      this.datasetStatusText = '连接采集服务失败'
+      return
+    }
+
+    const started = await this.datasetWsApi.startDataset(
+      this.resourceCode,
+      this.datasetFrameFps,
+      this.datasetWindowFrameCount
+    )
+
+    if (!started) {
+      this.isDatasetCollecting = false
+      this.datasetStatusText = '启动采集失败'
+      await this.datasetWsApi.disconnect()
+      return
+    }
+
+    this.startCaptureLoop()
+  }
+
+  private async stopDatasetCollect(preserveStatus: boolean = false): Promise<void> {
+    const wasCollecting = this.isDatasetCollecting
+
+    this.isDatasetCollecting = false
+    this.datasetCountdownText = ''
+
+    if (wasCollecting) {
+      await this.datasetWsApi.cancelDataset()
+    }
+
+    await this.datasetWsApi.disconnect()
+
+    if (!preserveStatus) {
+      this.datasetStatusText = '采集已取消'
+      this.datasetValidFrames = 0
+    }
+  }
+
+  private handleDatasetStatus(message: DatasetWsStatusMessage): void {
+    this.datasetValidFrames = message.validFrames
+    this.datasetWindowSize = message.windowSize > 0 ? message.windowSize : this.datasetWindowFrameCount
+
+    if (message.status === 'ready') {
+      this.datasetStatusText = '采集服务已就绪，请摆好动作'
+      return
+    }
+
+    if (message.status === 'invalid_frame') {
+      this.datasetStatusText = message.message.length > 0 ? message.message : '无效帧：请露出双肩和手部'
+      return
+    }
+
+    if (message.status === 'collecting') {
+      this.datasetStatusText = `采集中：${this.datasetValidFrames}/${this.datasetWindowSize}`
+      return
+    }
+
+    if (message.status === 'saved') {
+      this.isDatasetCollecting = false
+      this.datasetCountdownText = ''
+      this.datasetValidFrames = this.datasetWindowSize
+      this.datasetStatusText = `采集保存成功：${message.label}`
+      this.datasetWsApi.disconnect()
+      return
+    }
+
+    if (message.status === 'cancelled') {
+      this.isDatasetCollecting = false
+      this.datasetCountdownText = ''
+      this.datasetStatusText = '采集已取消'
+      return
+    }
+  }
+
+
 
   private enqueueFrame(frame: ArrayBuffer): void {
     this.pendingFrame = frame
@@ -583,6 +757,11 @@ struct GesturePracticePage {
       return
     }
 
+    if (this.isDatasetCollecting) {
+      this.recognitionStatusText = '正在采集样本，请先取消或等待保存完成'
+      return
+    }
+
     if (!this.previewStarted || !this.surfaceId) {
       this.recognitionStatusText = '预览尚未就绪'
       return
@@ -590,7 +769,7 @@ struct GesturePracticePage {
 
     this.resetRecognitionView()
     this.isRecognizing = true
-    this.recognitionStatusText = '请露出双肩，并将手势保持在有效区内（0/30）'
+    this.recognitionStatusText = '请露出双肩，并将手势保持在画面内（0/30）'
 
     const connected = await this.gestureWsApi.connect(
       (result: GestureWsResultMessage) => {
@@ -665,14 +844,14 @@ struct GesturePracticePage {
     }
 
     if (result.status === 'no_hand' || result.status === 'missing_hand') {
-      this.recognitionStatusText = '未检测到有效动作，请露出双肩并将手势放入有效区'
+      this.recognitionStatusText = '未检测到有效动作，请露出双肩并将手势放入画面内'
       return
     }
 
     if (result.status === 'warming_up') {
       const safeTotal = result.windowSize > 0 ? result.windowSize : 30
       const safeProgress = Math.max(0, Math.min(result.validFrames, safeTotal))
-      this.recognitionStatusText = `请保持上半身和手势在有效区内（${safeProgress}/${safeTotal}）`
+      this.recognitionStatusText = `请保持上半身和手势在画面内（${safeProgress}/${safeTotal}）`
       return
     }
 
@@ -681,7 +860,7 @@ struct GesturePracticePage {
       if (result.label === this.resourceCode) {
         void this.handleRecognitionSuccess()
       } else {
-        this.recognitionStatusText = `当前识别为“${recognizedLabel}”，请保持动作在有效区内重试`
+        this.recognitionStatusText = `当前识别为“${recognizedLabel}”，请调整动作后重试`
       }
       return
     }
@@ -913,6 +1092,23 @@ struct GesturePracticePage {
         .backgroundColor('#000000')
 
 
+
+      if (this.datasetCountdownText !== '') {
+        Text(this.datasetCountdownText)
+          .fontSize(96)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#FFFFFF')
+          .backgroundColor('rgba(0,0,0,0.35)')
+          .borderRadius(64)
+          .width(128)
+          .height(128)
+          .textAlign(TextAlign.Center)
+          .align(Alignment.Center)
+      }
+
+
+
+
       Column() {
         Column({ space: 10 }) {
           Row({ space: 12 }) {
@@ -956,6 +1152,14 @@ struct GesturePracticePage {
               .fontSize(15)
               .lineHeight(22)
               .fontColor('#FFFFFF')
+            Text(`采集状态：${this.datasetStatusText}`)
+              .fontSize(14)
+              .lineHeight(20)
+              .fontColor('rgba(255,255,255,0.90)')
+
+            Text(`采集进度：${this.datasetValidFrames}/${this.datasetWindowSize}`)
+              .fontSize(14)
+              .fontColor('rgba(255,255,255,0.82)')
           }
           .width('100%')
           .padding(12)
@@ -998,6 +1202,36 @@ struct GesturePracticePage {
                 await this.startGestureRecognition()
               }
             })
+
+          Row({ space: 12 }) {
+            Button(this.isDatasetCollecting ? '采集中' : '采集样本')
+              .layoutWeight(1)
+              .height(48)
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#FFFFFF')
+              .backgroundColor(this.isDatasetCollecting ? 'rgba(148,163,184,0.82)' : 'rgba(16,185,129,0.92)')
+              .borderRadius(24)
+              .enabled(!this.isDatasetCollecting && !this.isRecognizing)
+              .onClick(async () => {
+                await this.startDatasetCollect()
+              })
+
+            Button('取消采集')
+              .layoutWeight(1)
+              .height(48)
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#FFFFFF')
+              .backgroundColor('rgba(239,68,68,0.86)')
+              .borderRadius(24)
+              .enabled(this.isDatasetCollecting)
+              .onClick(async () => {
+                await this.stopDatasetCollect()
+              })
+          }
+          .width('100%')
+          .margin({ top: 12 })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
