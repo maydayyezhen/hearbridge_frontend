@@ -65,7 +65,7 @@ struct GesturePracticePage {
    *
    * 当前统一为 10FPS，30 帧对应 3 秒动作窗口。
    */
-  private readonly gestureFrameFps: number = 10
+
 
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
@@ -73,6 +73,13 @@ struct GesturePracticePage {
 
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
+
+  /**
+   * 上报给识别服务的帧率。
+   *
+   * 当前统一为 10FPS，30 帧对应 3 秒动作窗口。
+   */
+  private readonly gestureFrameFps: number = 10
 
   private readonly jpegQuality: number = 80
 
@@ -276,7 +283,7 @@ struct GesturePracticePage {
   }
 
   private resetRecognitionView(): void {
-    this.recognitionStatusText = '点击开始识别'
+    this.recognitionStatusText = '请将上半身与手势动作保持在有效区内'
     this.hasRecognitionSucceeded = false
   }
 
@@ -444,6 +451,7 @@ struct GesturePracticePage {
     }
   }
 
+
   private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
     if (!this.surfaceId) {
       return null
@@ -582,7 +590,7 @@ struct GesturePracticePage {
 
     this.resetRecognitionView()
     this.isRecognizing = true
-    this.recognitionStatusText = '请保持手势，等待识别（0/30）'
+    this.recognitionStatusText = '请露出双肩，并将手势保持在有效区内（0/30）'
 
     const connected = await this.gestureWsApi.connect(
       (result: GestureWsResultMessage) => {
@@ -617,7 +625,7 @@ struct GesturePracticePage {
     const started = await this.gestureWsApi.startSession(
       this.gestureFrameWidth,
       this.gestureFrameHeight,
-      this.gestureFrameFps
+      this.gestureFrameFps,
     )
 
     if (!started) {
@@ -657,14 +665,14 @@ struct GesturePracticePage {
     }
 
     if (result.status === 'no_hand' || result.status === 'missing_hand') {
-      this.recognitionStatusText = '没有检测到手，请把手放进画面中'
+      this.recognitionStatusText = '未检测到有效动作，请露出双肩并将手势放入有效区'
       return
     }
 
     if (result.status === 'warming_up') {
       const safeTotal = result.windowSize > 0 ? result.windowSize : 30
       const safeProgress = Math.max(0, Math.min(result.validFrames, safeTotal))
-      this.recognitionStatusText = `请保持手势，等待识别（${safeProgress}/${safeTotal}）`
+      this.recognitionStatusText = `请保持上半身和手势在有效区内（${safeProgress}/${safeTotal}）`
       return
     }
 
@@ -673,7 +681,7 @@ struct GesturePracticePage {
       if (result.label === this.resourceCode) {
         void this.handleRecognitionSuccess()
       } else {
-        this.recognitionStatusText = `当前是“${recognizedLabel}”，不是目标动作`
+        this.recognitionStatusText = `当前识别为“${recognizedLabel}”，请保持动作在有效区内重试`
       }
       return
     }
@@ -885,6 +893,7 @@ struct GesturePracticePage {
     .borderRadius(24)
   }
 
+
   @Builder
   private buildCameraOverlay(): void {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -902,6 +911,7 @@ struct GesturePracticePage {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
+
 
       Column() {
         Column({ space: 10 }) {

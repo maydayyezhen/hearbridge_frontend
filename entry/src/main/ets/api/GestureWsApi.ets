@@ -89,6 +89,22 @@ export class GestureWsApi {
     return success
   }
 
+    const message = new GestureWsStartMessage(
+      width,
+      height,
+      fps,
+      roiXRatio,
+      roiYRatio,
+      roiWidthRatio,
+      roiHeightRatio
+    )
+    const success = await this.sendRaw(JSON.stringify(message))
+    if (success) {
+      this.started = true
+    }
+    return success
+  }
+
   /**
    * 发送 JPEG 帧
    */
