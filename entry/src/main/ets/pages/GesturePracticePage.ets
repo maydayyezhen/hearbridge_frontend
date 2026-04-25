@@ -41,6 +41,7 @@ struct GesturePracticePage {
   @State datasetValidFrames: number = 0
   @State datasetWindowSize: number = 30
   @State datasetCountdownText: string = ''
+  @State isDatasetWaitingConfirm: boolean = false
 
   @State avatarStatusText: string = '数字人加载中'
   @State avatarErrorText: string = ''
@@ -578,7 +579,7 @@ struct GesturePracticePage {
   }
 
   private async handleDatasetFrame(jpegBytes: ArrayBuffer): Promise<void> {
-    if (!this.isDatasetCollecting) {
+    if (!this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
       return
     }
 
@@ -624,6 +625,7 @@ struct GesturePracticePage {
     this.datasetValidFrames = 0
     this.datasetWindowSize = this.datasetWindowFrameCount
     this.datasetCountdownText = ''
+    this.isDatasetWaitingConfirm = false
     this.datasetPrepareStartTime = Date.now()
     this.isDatasetCollecting = true
     this.datasetStatusText = `准备采集当前动作：${this.resourceCode}`
@@ -666,19 +668,46 @@ struct GesturePracticePage {
 
   private async stopDatasetCollect(preserveStatus: boolean = false): Promise<void> {
     const wasCollecting = this.isDatasetCollecting
+    const wasWaitingConfirm = this.isDatasetWaitingConfirm
 
     this.isDatasetCollecting = false
+    this.isDatasetWaitingConfirm = false
     this.datasetCountdownText = ''
 
-    if (wasCollecting) {
+    if (wasCollecting || wasWaitingConfirm) {
       await this.datasetWsApi.cancelDataset()
     }
 
     await this.datasetWsApi.disconnect()
 
     if (!preserveStatus) {
-      this.datasetStatusText = '采集已取消'
+      this.datasetStatusText = wasWaitingConfirm ? '待确认样本已取消' : '采集已取消'
       this.datasetValidFrames = 0
+    }
+  }
+
+  private async confirmSaveDataset(): Promise<void> {
+    if (!this.isDatasetWaitingConfirm) {
+      return
+    }
+
+    const success = await this.datasetWsApi.saveDataset()
+    if (!success) {
+      this.datasetStatusText = '确认保存失败：采集服务未连接'
+    }
+  }
+
+  private async discardPendingDataset(): Promise<void> {
+    if (!this.isDatasetWaitingConfirm) {
+      return
+    }
+
+    const success = await this.datasetWsApi.discardDataset()
+    if (!success) {
+      this.isDatasetWaitingConfirm = false
+      this.datasetValidFrames = 0
+      this.datasetStatusText = '丢弃失败：采集服务未连接，已在前端清空状态'
+      await this.datasetWsApi.disconnect()
     }
   }
 
@@ -701,8 +730,18 @@ struct GesturePracticePage {
       return
     }
 
+    if (message.status === 'ready_to_save') {
+      this.isDatasetCollecting = false
+      this.isDatasetWaitingConfirm = true
+      this.datasetCountdownText = ''
+      this.datasetValidFrames = this.datasetWindowSize
+      this.datasetStatusText = message.message.length > 0 ? message.message : '样本采集完成，请确认是否保存'
+      return
+    }
+
     if (message.status === 'saved') {
       this.isDatasetCollecting = false
+      this.isDatasetWaitingConfirm = false
       this.datasetCountdownText = ''
       this.datasetValidFrames = this.datasetWindowSize
       this.datasetStatusText = `采集保存成功：${message.label}`
@@ -710,8 +749,19 @@ struct GesturePracticePage {
       return
     }
 
+    if (message.status === 'discarded') {
+      this.isDatasetCollecting = false
+      this.isDatasetWaitingConfirm = false
+      this.datasetCountdownText = ''
+      this.datasetValidFrames = 0
+      this.datasetStatusText = '样本已丢弃，可重新采集'
+      this.datasetWsApi.disconnect()
+      return
+    }
+
     if (message.status === 'cancelled') {
       this.isDatasetCollecting = false
+      this.isDatasetWaitingConfirm = false
       this.datasetCountdownText = ''
       this.datasetStatusText = '采集已取消'
       return
@@ -757,8 +807,8 @@ struct GesturePracticePage {
       return
     }
 
-    if (this.isDatasetCollecting) {
-      this.recognitionStatusText = '正在采集样本，请先取消或等待保存完成'
+    if (this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
+      this.recognitionStatusText = '正在采集或等待保存样本，请先处理当前样本'
       return
     }
 
@@ -1212,7 +1262,7 @@ struct GesturePracticePage {
               .fontColor('#FFFFFF')
               .backgroundColor(this.isDatasetCollecting ? 'rgba(148,163,184,0.82)' : 'rgba(16,185,129,0.92)')
               .borderRadius(24)
-              .enabled(!this.isDatasetCollecting && !this.isRecognizing)
+              .enabled(!this.isDatasetCollecting && !this.isDatasetWaitingConfirm && !this.isRecognizing)
               .onClick(async () => {
                 await this.startDatasetCollect()
               })
@@ -1225,13 +1275,42 @@ struct GesturePracticePage {
               .fontColor('#FFFFFF')
               .backgroundColor('rgba(239,68,68,0.86)')
               .borderRadius(24)
-              .enabled(this.isDatasetCollecting)
+              .enabled(this.isDatasetCollecting || this.isDatasetWaitingConfirm)
               .onClick(async () => {
                 await this.stopDatasetCollect()
               })
           }
           .width('100%')
           .margin({ top: 12 })
+          if (this.isDatasetWaitingConfirm) {
+            Row({ space: 12 }) {
+              Button('保存样本')
+                .layoutWeight(1)
+                .height(48)
+                .fontSize(16)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FFFFFF')
+                .backgroundColor('rgba(37,99,235,0.92)')
+                .borderRadius(24)
+                .onClick(async () => {
+                  await this.confirmSaveDataset()
+                })
+
+              Button('丢弃样本')
+                .layoutWeight(1)
+                .height(48)
+                .fontSize(16)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FFFFFF')
+                .backgroundColor('rgba(107,114,128,0.92)')
+                .borderRadius(24)
+                .onClick(async () => {
+                  await this.discardPendingDataset()
+                })
+            }
+            .width('100%')
+            .margin({ top: 12 })
+          }
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)

@@ -1,7 +1,13 @@
 import { webSocket } from '@kit.NetworkKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import { AppConfig } from '../common/constants/AppConfig'
-import { DatasetWsCancelMessage, DatasetWsStartMessage, DatasetWsStatusMessage } from '../model/DatasetWsModels'
+import {
+  DatasetWsCancelMessage,
+  DatasetWsDiscardMessage,
+  DatasetWsSaveMessage,
+  DatasetWsStartMessage,
+  DatasetWsStatusMessage
+} from '../model/DatasetWsModels'
 
 type OnDatasetStatusCallback = (message: DatasetWsStatusMessage) => void
 type OnDatasetErrorCallback = (message: string) => void
@@ -79,6 +85,26 @@ export class DatasetWsApi {
       return false
     }
     return await this.sendRaw(JSON.stringify(new DatasetWsCancelMessage()))
+  }
+
+  /**
+   * 确认保存当前待确认样本。
+   */
+  async saveDataset(): Promise<boolean> {
+    if (!this.connected || !this.openResolved) {
+      return false
+    }
+    return await this.sendRaw(JSON.stringify(new DatasetWsSaveMessage()))
+  }
+
+  /**
+   * 丢弃当前待确认样本。
+   */
+  async discardDataset(): Promise<boolean> {
+    if (!this.connected || !this.openResolved) {
+      return false
+    }
+    return await this.sendRaw(JSON.stringify(new DatasetWsDiscardMessage()))
   }
 
   async disconnect(): Promise<void> {

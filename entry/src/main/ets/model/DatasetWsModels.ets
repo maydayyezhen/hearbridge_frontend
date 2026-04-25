@@ -25,6 +25,20 @@ export class DatasetWsCancelMessage {
 }
 
 /**
+ * 确认保存当前待确认 raw dataset 样本。
+ */
+export class DatasetWsSaveMessage {
+  type: string = 'save_dataset'
+}
+
+/**
+ * 丢弃当前待确认 raw dataset 样本。
+ */
+export class DatasetWsDiscardMessage {
+  type: string = 'discard_dataset'
+}
+
+/**
  * Python 采集服务返回的状态消息。
  */
 export interface DatasetWsStatusMessage {
