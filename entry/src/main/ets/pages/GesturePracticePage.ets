@@ -95,6 +95,29 @@ struct GesturePracticePage {
 
   private readonly jpegQuality: number = 80
 
+  /**
+   * 前端发送给后端前是否旋转图像。
+   *
+   * 后端不再做 rotate，所以这里负责把画面整理到 MediaPipe 可直接识别的方向。
+   */
+  private readonly shouldRotateFrameBeforeSend: boolean = true
+
+  /**
+   * 前端发送给后端前的旋转角度。
+   *
+   * PixelMap.rotate(90) 表示顺时针旋转 90 度。
+   * 如果后端以前使用 cv2.ROTATE_90_COUNTERCLOCKWISE 才是正确方向，
+   * 那这里可能需要改成 270。
+   */
+  private readonly frameRotateDegreesBeforeSend: number = 270
+
+  /**
+   * 前端发送给后端前是否水平镜像。
+   *
+   * 目标：让发送给后端的 JPEG 与手机自拍预览的左右效果一致。
+   */
+  private readonly shouldMirrorFrameBeforeSend: boolean = true
+
   /** raw dataset 采集帧率。 */
   private readonly datasetFrameFps: number = 10
 
@@ -477,6 +500,25 @@ struct GesturePracticePage {
     }
   }
 
+  /**
+   * 规范化准备发送给后端的 PixelMap。
+   *
+   * 注意：
+   * - 后端不再 rotate / flip
+   * - 这里输出的 PixelMap 必须是 MediaPipe-ready 图像
+   * - 识别和采集共用这一套输出
+   */
+  private async normalizeFramePixelMapBeforeSend(sourceMap: image.PixelMap): Promise<void> {
+    if (this.shouldRotateFrameBeforeSend && this.frameRotateDegreesBeforeSend !== 0) {
+      await sourceMap.rotate(this.frameRotateDegreesBeforeSend)
+    }
+
+    if (this.shouldMirrorFrameBeforeSend) {
+      // 水平镜像：horizontal = true, vertical = false
+      await sourceMap.flip(true, false)
+    }
+  }
+
 
   private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
     if (!this.surfaceId) {
@@ -488,6 +530,10 @@ struct GesturePracticePage {
 
     try {
       sourceMap = await image.createPixelMapFromSurface(this.surfaceId)
+
+      // 前端负责把图像处理成后端可直接送入 MediaPipe 的状态。
+      await this.normalizeFramePixelMapBeforeSend(sourceMap)
+
       const info = sourceMap.getImageInfoSync()
 
       this.gestureFrameWidth = info.size.width
