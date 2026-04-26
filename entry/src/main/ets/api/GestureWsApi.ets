@@ -178,6 +178,7 @@ export class GestureWsApi {
   private handleTextMessage(text: string): void {
     try {
       const parsed = JSON.parse(text) as Record<string, Object>
+      console.info(`[GestureWsApi] raw result text: ${text}`)
       const msgType = this.readStringField(parsed, 'type')
 
       if (msgType === 'result') {
@@ -188,8 +189,16 @@ export class GestureWsApi {
           confidence: this.readNumberField(parsed, 'confidence'),
           validFrames: this.readNumberField(parsed, 'validFrames'),
           windowSize: this.readNumberField(parsed, 'windowSize'),
-          hasValidHand: this.readBooleanField(parsed, 'hasValidHand')
+          hasValidHand: this.readBooleanField(parsed, 'hasValidHand'),
+          modelVersionName: this.readStringField(parsed, 'modelVersionName'),
+          modelPath: this.readStringField(parsed, 'modelPath'),
+          labelMapPath: this.readStringField(parsed, 'labelMapPath'),
+          usingPublishedModel: this.readBooleanField(parsed, 'usingPublishedModel')
         }
+
+        console.warn(
+          `[HB_MODEL_VERSION][api] modelVersionName=${result.modelVersionName}, usingPublishedModel=${result.usingPublishedModel}`
+        )
 
         if (this.onResultCallback !== null) {
           this.onResultCallback(result)

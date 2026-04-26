@@ -36,6 +36,12 @@ struct GesturePracticePage {
   @State isRecognizing: boolean = false
   @State hasRecognitionSucceeded: boolean = false
 
+  /** 当前实时识别服务使用的模型版本名称。 */
+  @State recognitionModelVersionName: string = '尚未建立识别会话'
+
+  /** 当前实时识别是否使用管理端发布模型。 */
+  @State recognitionUsingPublishedModel: boolean = false
+
   @State datasetStatusText: string = '可在查看数字人后采集当前动作样本'
   @State isDatasetCollecting: boolean = false
   @State datasetValidFrames: number = 0
@@ -342,6 +348,8 @@ struct GesturePracticePage {
   private resetRecognitionView(): void {
     this.recognitionStatusText = '请露出双肩，并让手势动作保持在画面内'
     this.hasRecognitionSucceeded = false
+    this.recognitionModelVersionName = '尚未建立识别会话'
+    this.recognitionUsingPublishedModel = false
   }
 
   private getPrimaryButtonText(): string {
@@ -941,6 +949,25 @@ struct GesturePracticePage {
 
     const connected = await this.gestureWsApi.connect(
       (result: GestureWsResultMessage) => {
+        console.warn(
+          `[HB_MODEL_VERSION][page] modelVersionName=${result.modelVersionName}, usingPublishedModel=${result.usingPublishedModel}`
+        )
+        console.info(
+          `[GesturePracticePage] result modelVersionName=${result.modelVersionName}, usingPublishedModel=${result.usingPublishedModel}`
+        )
+
+        this.recognitionModelVersionName =
+          result.modelVersionName && result.modelVersionName.length > 0
+            ? result.modelVersionName
+            : 'default'
+
+        this.recognitionUsingPublishedModel = result.usingPublishedModel
+        this.recognitionModelVersionName =
+          result.modelVersionName && result.modelVersionName.length > 0
+            ? result.modelVersionName
+            : 'default'
+
+        this.recognitionUsingPublishedModel = result.usingPublishedModel
         this.handleGestureWsResult(result)
       },
       (_message: string) => {
@@ -1320,6 +1347,10 @@ struct GesturePracticePage {
               .fontSize(15)
               .lineHeight(22)
               .fontColor('#FFFFFF')
+            Text(`当前模型：${this.recognitionModelVersionName}${this.recognitionUsingPublishedModel ? '（已发布）' : ''}`)
+              .fontSize(12)
+              .fontColor('rgba(255,255,255,0.72)')
+              .margin({ top: 6 })
             Text(`采集状态：${this.datasetStatusText}`)
               .fontSize(14)
               .lineHeight(20)
