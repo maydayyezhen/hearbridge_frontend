@@ -81,7 +81,15 @@ struct GesturePracticePage {
 
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
+
+  /** 识别链路待发送的最新帧。 */
   private pendingFrame: ArrayBuffer | null = null
+
+  /** 采集链路待发送的最新帧。 */
+  private pendingDatasetFrame: ArrayBuffer | null = null
+
+  /** 采集链路当前是否正在发送帧。 */
+  private isDatasetFrameSending: boolean = false
 
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
@@ -586,8 +594,12 @@ struct GesturePracticePage {
     }
 
     this.pendingFrame = null
+    this.pendingDatasetFrame = null
+
     this.captureInProgress = false
     this.isFrameSending = false
+    this.isDatasetFrameSending = false
+
     this.datasetCountdownText = ''
   }
 
@@ -614,13 +626,60 @@ struct GesturePracticePage {
       }
 
       // 采集链路：发送给 /ws/dataset
+      // 注意：这里不 await，避免采集发送阻塞抓帧循环。
       if (this.isDatasetCollecting) {
-        await this.handleDatasetFrame(jpegBytes)
+        this.enqueueDatasetFrame(jpegBytes)
       }
     } catch (error) {
       console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
     } finally {
       this.captureInProgress = false
+    }
+  }
+
+  /**
+   * 将采集链路的最新帧放入待发送槽位。
+   *
+   * 设计目标：
+   * - 不阻塞抓帧循环
+   * - 如果发送慢，只保留最新帧
+   * - 旧帧会被自然覆盖，避免采集画面卡顿
+   */
+  private enqueueDatasetFrame(frame: ArrayBuffer): void {
+    this.pendingDatasetFrame = frame
+    void this.flushPendingDatasetFrame()
+  }
+
+  /**
+   * 发送采集链路中最新的一帧。
+   *
+   * 与识别链路类似，采用“最新帧优先”策略：
+   * - 同一时间只发送一帧
+   * - 发送期间来了新帧，只保留最新的一帧
+   * - 当前帧发完后，如果还有 pending 帧，再继续发
+   */
+  private async flushPendingDatasetFrame(): Promise<void> {
+    if (this.isDatasetFrameSending || this.pendingDatasetFrame === null) {
+      return
+    }
+
+    if (!this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
+      this.pendingDatasetFrame = null
+      return
+    }
+
+    const frame = this.pendingDatasetFrame
+    this.pendingDatasetFrame = null
+    this.isDatasetFrameSending = true
+
+    try {
+      await this.handleDatasetFrame(frame)
+    } finally {
+      this.isDatasetFrameSending = false
+
+      if (this.pendingDatasetFrame !== null) {
+        void this.flushPendingDatasetFrame()
+      }
     }
   }
 
@@ -720,6 +779,9 @@ struct GesturePracticePage {
     this.isDatasetWaitingConfirm = false
     this.datasetCountdownText = ''
 
+    this.pendingDatasetFrame = null
+    this.isDatasetFrameSending = false
+
     if (wasCollecting || wasWaitingConfirm) {
       await this.datasetWsApi.cancelDataset()
     }
@@ -780,6 +842,10 @@ struct GesturePracticePage {
       this.isDatasetCollecting = false
       this.isDatasetWaitingConfirm = true
       this.datasetCountdownText = ''
+
+      this.pendingDatasetFrame = null
+      this.isDatasetFrameSending = false
+
       this.datasetValidFrames = this.datasetWindowSize
       this.datasetStatusText = message.message.length > 0 ? message.message : '样本采集完成，请确认是否保存'
       return
@@ -789,6 +855,8 @@ struct GesturePracticePage {
       this.isDatasetCollecting = false
       this.isDatasetWaitingConfirm = false
       this.datasetCountdownText = ''
+      this.pendingDatasetFrame = null
+      this.isDatasetFrameSending = false
       this.datasetValidFrames = this.datasetWindowSize
       this.datasetStatusText = `采集保存成功：${message.label}`
       this.datasetWsApi.disconnect()
@@ -799,6 +867,8 @@ struct GesturePracticePage {
       this.isDatasetCollecting = false
       this.isDatasetWaitingConfirm = false
       this.datasetCountdownText = ''
+      this.pendingDatasetFrame = null
+      this.isDatasetFrameSending = false
       this.datasetValidFrames = 0
       this.datasetStatusText = '样本已丢弃，可重新采集'
       this.datasetWsApi.disconnect()
@@ -809,6 +879,8 @@ struct GesturePracticePage {
       this.isDatasetCollecting = false
       this.isDatasetWaitingConfirm = false
       this.datasetCountdownText = ''
+      this.pendingDatasetFrame = null
+      this.isDatasetFrameSending = false
       this.datasetStatusText = '采集已取消'
       return
     }
