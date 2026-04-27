@@ -55,7 +55,7 @@ struct MineProfilePage {
         }
         .width('100%')
         .constraintSize({ minHeight: '100%' })
-        .padding({ left: 0, right: 0, top: 6, bottom: 20 })
+        .padding({ left: 0, right: 0, top: 0, bottom: 20 })
         .alignItems(HorizontalAlign.Start)
         .justifyContent(FlexAlign.Start)
       }
@@ -73,7 +73,7 @@ struct MineProfilePage {
   }
 
   build() {
-    Column({ space: 16 }) {
+    Column({ space: 10 }) {
       this.buildTopBar()
       this.buildContentArea()
     }
