@@ -85,79 +85,78 @@ struct Index {
   }
 
   build() {
-    Column() {
-      if (!this.isLoggedIn) {
-        Column() {
-          MineRootTabClean({
-            categoryCount: this.categoryList.length,
-            loginOnly: true
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        if (!this.isLoggedIn) {
+          Stack({ alignContent: Alignment.TopStart }) {
+            MineRootTabClean({
+              categoryCount: this.categoryList.length,
+              loginOnly: true
+            })
+          }
+          .width('100%')
+          .height('100%')
+        } else {
+          Tabs({
+            barPosition: BarPosition.End,
+            controller: this.tabsController
+          }) {
+            TabContent() {
+              Stack({ alignContent: Alignment.TopStart }) {
+                HomeRootTab({
+                  categories: this.categoryList,
+                  loading: this.loading,
+                  errorText: this.errorText,
+                  onOpenTrainingTab: (): void => {
+                    this.switchToTab(1)
+                  }
+                })
+              }
+              .width('100%')
+              .height('100%')
+            }
+              .tabBar(this.buildTabItem(0, '首页', $r('sys.symbol.house'), $r('sys.symbol.house_fill')))
+
+            TabContent() {
+              Stack({ alignContent: Alignment.TopStart }) {
+                TrainingRootTab({
+                  categories: this.categoryList,
+                  loading: this.loading,
+                  errorText: this.errorText
+                })
+              }
+              .width('100%')
+              .height('100%')
+            }
+              .tabBar(this.buildTabItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill')))
+
+            TabContent() {
+              Stack({ alignContent: Alignment.TopStart }) {
+                MineRootTabClean({
+                  categoryCount: this.categoryList.length,
+                  loginOnly: false
+                })
+              }
+              .width('100%')
+              .height('100%')
+            }
+              .tabBar(this.buildTabItem(2, '我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill')))
+          }
+          .vertical(false)
+          .barMode(BarMode.Fixed)
+          .backgroundColor('#FFFFFF')
+          .onChange((index: number) => {
+            this.currentTabIndex = index
           })
+          .width('100%')
+          .layoutWeight(1)
         }
-        .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Start)
-      } else {
-        Tabs({
-          barPosition: BarPosition.End,
-          controller: this.tabsController
-        }) {
-          TabContent() {
-            Column() {
-              HomeRootTab({
-                categories: this.categoryList,
-                loading: this.loading,
-                errorText: this.errorText,
-                onOpenTrainingTab: (): void => {
-                  this.switchToTab(1)
-                }
-              })
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Start)
-            .alignItems(HorizontalAlign.Start)
-          }
-            .tabBar(this.buildTabItem(0, '首页', $r('sys.symbol.house'), $r('sys.symbol.house_fill')))
-
-          TabContent() {
-            Column() {
-              TrainingRootTab({
-                categories: this.categoryList,
-                loading: this.loading,
-                errorText: this.errorText
-              })
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Start)
-            .alignItems(HorizontalAlign.Start)
-          }
-            .tabBar(this.buildTabItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill')))
-
-          TabContent() {
-            Column() {
-              MineRootTabClean({
-                categoryCount: this.categoryList.length,
-                loginOnly: false
-              })
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Start)
-            .alignItems(HorizontalAlign.Start)
-          }
-            .tabBar(this.buildTabItem(2, '我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill')))
-        }
-        .vertical(false)
-        .barMode(BarMode.Fixed)
-        .backgroundColor('#FFFFFF')
-        .onChange((index: number) => {
-          this.currentTabIndex = index
-        })
-        .width('100%')
-        .layoutWeight(1)
       }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor(PAGE_BG)
     }
     .width('100%')
     .height('100%')
