@@ -98,7 +98,10 @@ export struct MineRootTabClean {
           this.buildMainContent()
         }
         .width('100%')
+        .constraintSize({ minHeight: '100%' })
         .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
       }
       .width('100%')
       .height('100%')
