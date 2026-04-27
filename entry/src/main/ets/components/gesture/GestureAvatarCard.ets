@@ -3,7 +3,7 @@ import { webview } from '@kit.ArkWeb'
 /**
  * 数字人示范卡片。
  *
- * 只负责展示数字人 WebView、播放按钮、状态与错误信息。
+ * 只负责展示数字人 WebView、播放入口、状态与错误信息。
  * 数字人播放逻辑由 GestureAvatarPlaybackService 管理。
  */
 @Component
@@ -24,7 +24,7 @@ export struct GestureAvatarCard {
    * 当前手语训练页希望尽量保持单屏不可滚动，
    * 所以默认高度采用适中的紧凑值；如后续有独立大屏预览页，可由父组件显式传入更大高度。
    */
-  @Prop avatarViewportHeight: number = 280
+  @Prop avatarViewportHeight: number = 310
 
   /** 是否使用紧凑展示模式。 */
   @Prop compact: boolean = true
@@ -44,45 +44,27 @@ export struct GestureAvatarCard {
   build() {
     Column({ space: this.compact ? 10 : 18 }) {
       Row({ space: 10 }) {
-        Column({ space: 4 }) {
-          Text('数字人演示')
+        Text('数字人演示')
+          .layoutWeight(1)
+          .fontSize(this.compact ? 18 : 22)
+          .fontWeight(FontWeight.Bold)
+
+        Button() {
+          SymbolGlyph($r('sys.symbol.play_fill'))
             .fontSize(this.compact ? 18 : 22)
-            .fontWeight(FontWeight.Bold)
-
-          Text(this.avatarStatusText)
-            .fontSize(this.compact ? 12 : 14)
-            .fontColor('#667085')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .fontColor(['#FFFFFF'])
         }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Button('播放')
-          .height(this.compact ? 34 : 42)
-          .padding({ left: this.compact ? 14 : 20, right: this.compact ? 14 : 20 })
-          .fontSize(this.compact ? 14 : 16)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor('#2D6CDF')
-          .fontColor('#FFFFFF')
-          .borderRadius(this.compact ? 17 : 21)
-          .onClick(() => {
-            this.onPlay()
-          })
-
-        Button('重播')
-          .height(this.compact ? 34 : 42)
-          .padding({ left: this.compact ? 14 : 20, right: this.compact ? 14 : 20 })
-          .fontSize(this.compact ? 14 : 16)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor('#0F172A')
-          .fontColor('#FFFFFF')
-          .borderRadius(this.compact ? 17 : 21)
-          .onClick(() => {
-            this.onReplay()
-          })
+        .width(this.compact ? 36 : 42)
+        .height(this.compact ? 36 : 42)
+        .backgroundColor('#2D6CDF')
+        .borderRadius(this.compact ? 18 : 21)
+        .stateEffect(true)
+        .onClick(() => {
+          this.onPlay()
+        })
       }
       .width('100%')
+      .alignItems(VerticalAlign.Center)
 
       Stack({ alignContent: Alignment.Center }) {
         Web({
