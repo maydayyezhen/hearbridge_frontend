@@ -9,31 +9,62 @@ const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#111827'
 const TEXT_SUB: string = '#667085'
 const BORDER: string = '#E5EAF3'
+const SURFACE_SOFT: string = '#F7F8FA'
 
+/**
+ * 训练中心根 Tab。
+ *
+ * 当前定位：
+ * 1. 作为训练资源搜索入口，而不是传统分类首页。
+ * 2. 搜索范围暂时基于当前已加载分类；后续可接入后端资源搜索接口。
+ * 3. 点击分类进入具体手势资源列表，点击最近练习直接进入训练页。
+ */
 @Component
 export struct TrainingRootTab {
+  /** 当前可用训练分类。 */
   @Prop categories: CategoryDto[] = []
+  /** 分类加载状态。 */
   @Prop loading: boolean = false
+  /** 分类加载错误文案。 */
   @Prop errorText: string = ''
 
+  /** 搜索关键词。 */
   @State keyword: string = ''
 
+  /** 最近练习资源 ID。 */
   @StorageLink('recent.practice.id') recentPracticeId: number = 0
+  /** 最近练习资源编码。 */
   @StorageLink('recent.practice.code') recentPracticeCode: string = ''
+  /** 最近练习资源名称。 */
   @StorageLink('recent.practice.name') recentPracticeName: string = ''
+  /** 最近练习 SiGML 地址。 */
   @StorageLink('recent.practice.sigmlUrl') recentPracticeSigmlUrl: string = ''
+  /** 最近练习封面地址。 */
   @StorageLink('recent.practice.coverUrl') recentPracticeCoverUrl: string = ''
 
+  /** 判断是否存在最近练习。 */
   private hasRecentPractice(): boolean {
     return this.recentPracticeCode.trim().length > 0 && this.recentPracticeSigmlUrl.trim().length > 0
   }
 
+  /** 获取最近练习标题。 */
   private getRecentPracticeTitle(): string {
     return this.recentPracticeName.trim().length > 0 ? this.recentPracticeName : this.recentPracticeCode
   }
 
+  /** 获取搜索关键词。 */
+  private getKeyword(): string {
+    return this.keyword.trim().toLowerCase()
+  }
+
+  /** 判断当前是否处于搜索状态。 */
+  private isSearching(): boolean {
+    return this.getKeyword().length > 0
+  }
+
+  /** 获取可见分类列表。 */
   private getVisibleCategories(): CategoryDto[] {
-    const keyword = this.keyword.trim().toLowerCase()
+    const keyword = this.getKeyword()
     if (keyword.length === 0) {
       return this.categories
     }
@@ -45,6 +76,7 @@ export struct TrainingRootTab {
     })
   }
 
+  /** 打开分类资源列表页。 */
   private openCategory(item: CategoryDto): void {
     try {
       const params: GestureListPageParams = new GestureListPageParams(item.code, item.nameZh)
@@ -59,6 +91,7 @@ export struct TrainingRootTab {
     }
   }
 
+  /** 继续最近一次练习。 */
   private continueRecentPractice(): void {
     if (!this.hasRecentPractice()) {
       return
@@ -73,7 +106,7 @@ export struct TrainingRootTab {
         this.recentPracticeCoverUrl
       )
       router.pushUrl({
-        url: 'pages/GesturePracticePage',
+        url: 'pages/GesturePracticePageRefactored',
         params: params
       }).catch((err: Object) => {
         console.error(`[TrainingRootTab] continue practice failed: ${JSON.stringify(err)}`)
@@ -83,38 +116,89 @@ export struct TrainingRootTab {
     }
   }
 
+  /** 清空搜索关键词。 */
+  private clearKeyword(): void {
+    this.keyword = ''
+  }
+
+  /** 构建分类徽标文字。 */
   private buildBadgeText(item: CategoryDto): string {
     const source = item.nameZh.trim().length > 0 ? item.nameZh : item.code
     return source.length > 0 ? source.slice(0, 1).toUpperCase() : 'S'
   }
 
+  /** 构建顶部搜索区。 */
   @Builder
-  private buildHeader(): void {
-    Column({ space: 8 }) {
-      Text('训练中心')
-        .fontSize(30)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(TEXT_MAIN)
+  private buildSearchHero(): void {
+    Column({ space: 14 }) {
+      Column({ space: 8 }) {
+        Text('训练搜索')
+          .fontSize(30)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
 
-      Text('从分类进入练习，或者继续上一次数字人与相机训练。')
-        .fontSize(14)
-        .lineHeight(22)
-        .fontColor(TEXT_SUB)
+        Text('搜索分类，快速进入对应的手语资源与相机训练。')
+          .fontSize(14)
+          .lineHeight(22)
+          .fontColor(TEXT_SUB)
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 10 }) {
+        TextInput({ text: this.keyword, placeholder: '搜索训练分类或编码' })
+          .layoutWeight(1)
+          .height(48)
+          .backgroundColor(CARD_BG)
+          .borderRadius(18)
+          .fontSize(15)
+          .padding({ left: 16, right: 16 })
+          .border({ width: 1, color: BORDER })
+          .onChange((value: string) => {
+            this.keyword = value
+          })
+
+        if (this.isSearching()) {
+          Button('清除')
+            .height(48)
+            .padding({ left: 16, right: 16 })
+            .fontSize(14)
+            .fontColor(PRIMARY)
+            .backgroundColor(PRIMARY_SOFT)
+            .borderRadius(18)
+            .stateEffect(false)
+            .onClick(() => {
+              this.clearKeyword()
+            })
+        }
+      }
+      .width('100%')
+
+      Row() {
+        Text(this.isSearching()
+          ? `找到 ${this.getVisibleCategories().length} 个匹配分类`
+          : `当前共有 ${this.categories.length} 个训练分类`)
+          .fontSize(12)
+          .fontColor(TEXT_SUB)
+
+        Blank()
+      }
+      .width('100%')
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
   }
 
+  /** 构建最近练习卡片。 */
   @Builder
   private buildRecentPracticeCard(): void {
     Row({ space: 14 }) {
-      Column({ space: 4 }) {
+      Column({ space: 5 }) {
         Text('继续上次')
           .fontSize(13)
           .fontColor(TEXT_SUB)
 
         Text(this.getRecentPracticeTitle())
-          .fontSize(22)
+          .fontSize(21)
           .fontWeight(FontWeight.Bold)
           .fontColor(TEXT_MAIN)
           .maxLines(1)
@@ -146,31 +230,9 @@ export struct TrainingRootTab {
     .border({ width: 1, color: BORDER })
   }
 
+  /** 构建分类结果卡片。 */
   @Builder
-  private buildSearchBox(): void {
-    Column({ space: 10 }) {
-      TextInput({ text: this.keyword, placeholder: '搜索分类名称或编码' })
-        .width('100%')
-        .height(46)
-        .backgroundColor(CARD_BG)
-        .borderRadius(18)
-        .fontSize(15)
-        .padding({ left: 16, right: 16 })
-        .border({ width: 1, color: BORDER })
-        .onChange((value: string) => {
-          this.keyword = value
-        })
-
-      Text(`共 ${this.getVisibleCategories().length} 个可用分类`)
-        .fontSize(12)
-        .fontColor(TEXT_SUB)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private buildCategoryCard(item: CategoryDto): void {
+  private buildCategoryResultCard(item: CategoryDto): void {
     Row({ space: 14 }) {
       Stack({ alignContent: Alignment.Center }) {
         Text(this.buildBadgeText(item))
@@ -199,7 +261,7 @@ export struct TrainingRootTab {
       .alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Center)
 
-      Text('开始')
+      Text('进入')
         .fontSize(14)
         .fontColor(PRIMARY)
     }
@@ -213,6 +275,7 @@ export struct TrainingRootTab {
     })
   }
 
+  /** 构建搜索状态卡片。 */
   @Builder
   private buildStateCard(title: string, description: string): void {
     Column({ space: 10 }) {
@@ -235,35 +298,52 @@ export struct TrainingRootTab {
     .alignItems(HorizontalAlign.Center)
   }
 
+  /** 构建搜索结果区域。 */
+  @Builder
+  private buildSearchResults(): void {
+    Column({ space: 14 }) {
+      Row() {
+        Text(this.isSearching() ? '搜索结果' : '全部分类')
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
+
+        Blank()
+      }
+      .width('100%')
+
+      if (this.loading) {
+        this.buildStateCard('正在加载训练分类', '稍等一下，我们正在同步当前训练资源。')
+      } else if (this.errorText.trim().length > 0) {
+        this.buildStateCard('训练分类加载失败', this.errorText)
+      } else if (this.getVisibleCategories().length === 0) {
+        this.buildStateCard('没有匹配结果', '换个关键词试试，或者清空搜索查看全部分类。')
+      } else {
+        Column({ space: 14 }) {
+          ForEach(
+            this.getVisibleCategories(),
+            (item: CategoryDto) => {
+              this.buildCategoryResultCard(item)
+            },
+            (item: CategoryDto) => item.id.toString()
+          )
+        }
+        .width('100%')
+      }
+    }
+    .width('100%')
+  }
+
   build() {
     Scroll() {
       Column({ space: 18 }) {
-        this.buildHeader()
+        this.buildSearchHero()
 
-        if (this.hasRecentPractice()) {
+        if (this.hasRecentPractice() && !this.isSearching()) {
           this.buildRecentPracticeCard()
         }
 
-        this.buildSearchBox()
-
-        if (this.loading) {
-          this.buildStateCard('正在加载训练分类', '稍等一下，我们正在同步当前训练资源。')
-        } else if (this.errorText.trim().length > 0) {
-          this.buildStateCard('训练分类加载失败', this.errorText)
-        } else if (this.getVisibleCategories().length === 0) {
-          this.buildStateCard('没有匹配结果', '换个关键词试试，或者直接清空搜索看看全部分类。')
-        } else {
-          Column({ space: 14 }) {
-            ForEach(
-              this.getVisibleCategories(),
-              (item: CategoryDto) => {
-                this.buildCategoryCard(item)
-              },
-              (item: CategoryDto) => item.id.toString()
-            )
-          }
-          .width('100%')
-        }
+        this.buildSearchResults()
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })
