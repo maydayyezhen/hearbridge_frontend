@@ -9,6 +9,18 @@ export class AppConfig {
 
   static readonly DATASET_WS_URL: string = 'ws://192.168.43.6:8000/ws/dataset'
 
+  /**
+   * 是否默认启用开发者采集模式。
+   *
+   * 默认关闭，避免普通用户直接看到或使用 raw dataset 采集能力。
+   */
+  static readonly DEFAULT_ENABLE_DATASET_COLLECT: boolean = false
+
+  /**
+   * 开发者采集模式在 AppStorage 中使用的 Key。
+   */
+  static readonly DATASET_COLLECT_STORAGE_KEY: string = 'developer.datasetCollect.enabled'
+
   static buildMinioBucketBaseUrl(): string {
     return `${AppConfig.MINIO_BASE_URL}/${AppConfig.MINIO_BUCKET}`
   }
