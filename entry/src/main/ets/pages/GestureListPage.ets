@@ -3,10 +3,9 @@ import { GestureApi } from '../api/GestureApi'
 import { GestureItemDto } from '../model/ApiModels'
 import { GestureListPageParams, GesturePracticePageParams } from '../model/GestureModels'
 
-const PRIMARY_TEXT: string = '#1F2A44'
+const TEXT_MAIN: string = '#11233C'
 const SECONDARY_TEXT: string = '#6B7A90'
 const SURFACE: string = '#FFFFFF'
-const SURFACE_SOFT: string = '#F5F8FD'
 const CARD_BG: string = '#F7F8FA'
 
 @Entry
@@ -89,42 +88,31 @@ struct GestureListPage {
 
   @Builder
   private buildTopBar(): void {
-    Column() {
-      Row({ space: 12 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          Row()
-            .width(34)
-            .height(34)
-            .backgroundColor(SURFACE_SOFT)
-            .borderRadius(12)
-            .shadow({ radius: 10, color: '#0D15304B', offsetX: 0, offsetY: 4 })
-
-          SymbolGlyph($r('sys.symbol.chevron_backward'))
-            .fontSize(18)
-            .fontColor([SECONDARY_TEXT])
-        }
-        .width(34)
-        .height(34)
-        .onClick(() => {
-          this.goBack()
-        })
-
-        Text(this.categoryName === '' ? '资源列表' : this.categoryName)
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(PRIMARY_TEXT)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Blank()
+    Row({ space: 12 }) {
+      Button() {
+        SymbolGlyph($r('sys.symbol.chevron_backward'))
+          .fontSize(22)
+          .fontColor([SECONDARY_TEXT])
       }
-      .width('100%')
-      .padding({ top: 10, bottom: 8 })
+      .width(40)
+      .height(40)
+      .borderRadius(14)
+      .backgroundColor(SURFACE)
+      .stateEffect(false)
+      .onClick(() => {
+        this.goBack()
+      })
+
+      Text(this.categoryName === '' ? '资源列表' : this.categoryName)
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(TEXT_MAIN)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      Blank()
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 0, bottom: 8 })
-    .backgroundColor(SURFACE)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
@@ -254,12 +242,13 @@ struct GestureListPage {
   }
 
   build() {
-    Column({ space: 0 }) {
+    Column({ space: 16 }) {
       this.buildTopBar()
       this.buildContentArea()
     }
     .width('100%')
     .height('100%')
+    .padding({ left: 16, right: 16, top: 16, bottom: 0 })
     .backgroundColor(SURFACE)
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
