@@ -2,6 +2,8 @@
   "src": [
     "pages/Index",
     "pages/GestureListPage",
-    "pages/GesturePracticePage"
+    "pages/GesturePracticePage",
+    "pages/MineProfilePage",
+    "pages/MineSecurityPage"
   ]
 }
