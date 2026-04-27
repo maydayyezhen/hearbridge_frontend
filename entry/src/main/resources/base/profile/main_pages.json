@@ -2,7 +2,6 @@
   "src": [
     "pages/Index",
     "pages/GestureListPage",
-    "pages/GesturePracticePage",
-    "pages/DatasetCollectPage"
+    "pages/GesturePracticePage"
   ]
 }
