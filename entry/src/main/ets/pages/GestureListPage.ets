@@ -76,7 +76,7 @@ struct GestureListPage {
         item.coverUrl
       )
       router.pushUrl({
-        url: 'pages/GesturePracticePage',
+        url: 'pages/GesturePracticePageRefactored',
         params: params
       }).catch((err: Object) => {
         console.error(`跳转训练页失败：${JSON.stringify(err)}`)
