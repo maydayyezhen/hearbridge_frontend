@@ -17,6 +17,12 @@ export struct GestureAvatarCard {
   /** 当前动作 SiGML 地址。 */
   @Prop sigmlUrl: string = ''
 
+  /** 数字人视窗高度。 */
+  @Prop avatarViewportHeight: number = 360
+
+  /** 是否使用紧凑展示模式。 */
+  @Prop compact: boolean = false
+
   /** 数字人 WebView 控制器。 */
   avatarController: webview.WebviewController = new webview.WebviewController()
 
@@ -30,40 +36,42 @@ export struct GestureAvatarCard {
   onPageEnd: () => void = () => {}
 
   build() {
-    Column({ space: 18 }) {
-      Row({ space: 12 }) {
-        Column({ space: 6 }) {
+    Column({ space: this.compact ? 10 : 18 }) {
+      Row({ space: 10 }) {
+        Column({ space: 4 }) {
           Text('数字人演示')
-            .fontSize(22)
+            .fontSize(this.compact ? 18 : 22)
             .fontWeight(FontWeight.Bold)
 
           Text(this.avatarStatusText)
-            .fontSize(14)
+            .fontSize(this.compact ? 12 : 14)
             .fontColor('#667085')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
 
         Button('播放')
-          .height(42)
-          .padding({ left: 20, right: 20 })
-          .fontSize(16)
+          .height(this.compact ? 34 : 42)
+          .padding({ left: this.compact ? 14 : 20, right: this.compact ? 14 : 20 })
+          .fontSize(this.compact ? 14 : 16)
           .fontWeight(FontWeight.Medium)
           .backgroundColor('#2D6CDF')
           .fontColor('#FFFFFF')
-          .borderRadius(21)
+          .borderRadius(this.compact ? 17 : 21)
           .onClick(() => {
             this.onPlay()
           })
 
         Button('重播')
-          .height(42)
-          .padding({ left: 20, right: 20 })
-          .fontSize(16)
+          .height(this.compact ? 34 : 42)
+          .padding({ left: this.compact ? 14 : 20, right: this.compact ? 14 : 20 })
+          .fontSize(this.compact ? 14 : 16)
           .fontWeight(FontWeight.Medium)
           .backgroundColor('#0F172A')
           .fontColor('#FFFFFF')
-          .borderRadius(21)
+          .borderRadius(this.compact ? 17 : 21)
           .onClick(() => {
             this.onReplay()
           })
@@ -85,7 +93,7 @@ export struct GestureAvatarCard {
             this.onPageEnd()
           })
           .width('100%')
-          .height(360)
+          .height(this.avatarViewportHeight)
 
         if (this.sigmlUrl === '') {
           Text('当前资源没有可播放的 SiGML 文件')
@@ -95,9 +103,9 @@ export struct GestureAvatarCard {
         }
       }
       .width('100%')
-      .height(360)
+      .height(this.avatarViewportHeight)
       .padding(0)
-      .borderRadius(28)
+      .borderRadius(this.compact ? 20 : 28)
       .clip(true)
       .backgroundColor('#E9EEF9')
       .border({
@@ -113,8 +121,8 @@ export struct GestureAvatarCard {
       }
     }
     .width('100%')
-    .padding(20)
+    .padding(this.compact ? 14 : 20)
     .backgroundColor('#F7F8FA')
-    .borderRadius(24)
+    .borderRadius(this.compact ? 20 : 24)
   }
 }
