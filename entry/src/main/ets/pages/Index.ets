@@ -87,41 +87,65 @@ struct Index {
   build() {
     Column() {
       if (!this.isLoggedIn) {
-        MineRootTabClean({
-          categoryCount: this.categoryList.length,
-          loginOnly: true
-        })
+        Column() {
+          MineRootTabClean({
+            categoryCount: this.categoryList.length,
+            loginOnly: true
+          })
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
       } else {
         Tabs({
           barPosition: BarPosition.End,
           controller: this.tabsController
         }) {
           TabContent() {
-            HomeRootTab({
-              categories: this.categoryList,
-              loading: this.loading,
-              errorText: this.errorText,
-              onOpenTrainingTab: (): void => {
-                this.switchToTab(1)
-              }
-            })
+            Column() {
+              HomeRootTab({
+                categories: this.categoryList,
+                loading: this.loading,
+                errorText: this.errorText,
+                onOpenTrainingTab: (): void => {
+                  this.switchToTab(1)
+                }
+              })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
           }
             .tabBar(this.buildTabItem(0, '首页', $r('sys.symbol.house'), $r('sys.symbol.house_fill')))
 
           TabContent() {
-            TrainingRootTab({
-              categories: this.categoryList,
-              loading: this.loading,
-              errorText: this.errorText
-            })
+            Column() {
+              TrainingRootTab({
+                categories: this.categoryList,
+                loading: this.loading,
+                errorText: this.errorText
+              })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
           }
             .tabBar(this.buildTabItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill')))
 
           TabContent() {
-            MineRootTabClean({
-              categoryCount: this.categoryList.length,
-              loginOnly: false
-            })
+            Column() {
+              MineRootTabClean({
+                categoryCount: this.categoryList.length,
+                loginOnly: false
+              })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
           }
             .tabBar(this.buildTabItem(2, '我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill')))
         }
