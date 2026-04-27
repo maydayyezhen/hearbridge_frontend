@@ -1,5 +1,6 @@
 import common from '@ohos.app.ability.common'
 import photoAccessHelper from '@ohos.file.photoAccessHelper'
+import { router } from '@kit.ArkUI'
 import { AuthApi } from '../../api/AuthApi'
 import { clearAuthState, saveUserState } from '../../common/auth/AuthStorage'
 import { readAvatarBytes, resolveAvatarFileName, resolveAvatarMimeType } from '../../common/file/AvatarFileReader'
@@ -177,8 +178,8 @@ export struct MineProfileEditPage {
     }
 
     await clearAuthState(this.getAbilityContext())
-    AppStorage.setOrCreate('mine.currentView', 'main')
     this.loggingOut = false
+    router.back()
   }
 
   /** 构建页面头部。 */
