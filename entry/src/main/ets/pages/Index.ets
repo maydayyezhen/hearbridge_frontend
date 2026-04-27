@@ -6,7 +6,7 @@ import { MineRootTabClean } from '../components/root/MineRootTabClean'
 import common from '@ohos.app.ability.common'
 import { restoreAuthState } from '../common/auth/AuthStorage'
 
-const PAGE_BG: string = '#F5F7FB'
+const PAGE_BG: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
 const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_ACTIVE: string = '#1D4ED8'
