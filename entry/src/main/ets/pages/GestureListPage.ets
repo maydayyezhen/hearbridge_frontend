@@ -164,71 +164,81 @@ struct GestureListPage {
     })
   }
 
-  build() {
-    Column() {
-      this.buildTopBar()
+  @Builder
+  private buildStateContent(title: string, description: string, isError: boolean = false): void {
+    Column({ space: 8 }) {
+      Text(title)
+        .fontSize(18)
+        .fontColor(isError ? Color.Red : '#666666')
 
-      if (this.loading) {
-        Column() {
-          Text('加载中...')
-            .fontSize(18)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else if (this.errorText !== '') {
-        Column() {
-          Text(this.errorText)
-            .fontSize(16)
-            .fontColor(Color.Red)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else if (this.gestureList.length === 0) {
-        Column({ space: 8 }) {
-          Text('当前分类下还没有资源数据')
-            .fontSize(18)
-            .fontColor('#666666')
-
-          Text('后续可以继续补充这个分类的手语资源')
-            .fontSize(14)
-            .fontColor('#999999')
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(16)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-      } else {
-        Scroll() {
-          Column({ space: 14 }) {
-            ForEach(
-              this.gestureList,
-              (item: GestureItemDto) => {
-                this.buildGestureItem(item)
-              },
-              (item: GestureItemDto) => item.id.toString()
-            )
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 16, bottom: 24 })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor('#FFFFFF')
-        .scrollBar(BarState.Off)
+      if (description.trim().length > 0) {
+        Text(description)
+          .fontSize(14)
+          .fontColor('#999999')
       }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(16)
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Start)
+  }
+
+  @Builder
+  private buildListContent(): void {
+    Scroll() {
+      Column({ space: 14 }) {
+        ForEach(
+          this.gestureList,
+          (item: GestureItemDto) => {
+            this.buildGestureItem(item)
+          },
+          (item: GestureItemDto) => item.id.toString()
+        )
+      }
+      .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .padding({ left: 16, right: 16, top: 6, bottom: 20 })
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#FFFFFF')
+    .scrollBar(BarState.Off)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  @Builder
+  private buildContentArea(): void {
+    Stack({ alignContent: Alignment.TopStart }) {
+      if (this.loading) {
+        this.buildStateContent('加载中...', '')
+      } else if (this.errorText !== '') {
+        this.buildStateContent(this.errorText, '', true)
+      } else if (this.gestureList.length === 0) {
+        this.buildStateContent('当前分类下还没有资源数据', '后续可以继续补充这个分类的手语资源')
+      } else {
+        this.buildListContent()
+      }
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .clip(true)
+    .backgroundColor('#FFFFFF')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  build() {
+    Column({ space: 0 }) {
+      this.buildTopBar()
+      this.buildContentArea()
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#FFFFFF')
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
