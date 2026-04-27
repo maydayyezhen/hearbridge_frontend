@@ -9,15 +9,14 @@ const CARD_BG: string = '#FFFFFF'
 const PRIMARY: string = '#1848DE'
 const TEXT_MAIN: string = '#11233C'
 const TEXT_SUB: string = '#7C8FA6'
+const TEXT_LABEL: string = '#3F5672'
+const INPUT_BG: string = '#F8FBFF'
+const INPUT_BORDER: string = '#C8D8EA'
 const DANGER: string = '#E5484D'
+const SUCCESS: string = '#2BA471'
 
 /**
  * 我的页正式版容器。
- *
- * 说明：
- * 1. 未登录场景继续复用原 MineRootTab 的登录 / 注册能力。
- * 2. 已登录场景只展示正式用户中心，不展示后端地址、MinIO 地址、开发者采集模式等调试信息。
- * 3. 账号与安全作为二级页面接入当前容器内部路由。
  */
 @Component
 export struct MineRootTabClean {
@@ -45,10 +44,18 @@ export struct MineRootTabClean {
 
   /** 当前我的页内部视图。 */
   @State currentView: string = 'main'
-  /** 页面提示文案，仅用于二级页必要操作反馈。 */
+  /** 当前密码。 */
+  @State currentPassword: string = ''
+  /** 新密码。 */
+  @State nextPassword: string = ''
+  /** 确认新密码。 */
+  @State confirmPassword: string = ''
+  /** 页面提示文案。 */
   @State pageTip: string = ''
   /** 是否正在退出登录。 */
   @State loggingOut: boolean = false
+  /** 是否正在修改密码。 */
+  @State changingPassword: boolean = false
 
   /** 获取当前 Ability 上下文。 */
   private getAbilityContext(): common.BaseContext {
@@ -95,6 +102,15 @@ export struct MineRootTabClean {
     this.pageTip = ''
   }
 
+  /** 打开修改密码页面。 */
+  private openPasswordView(): void {
+    this.currentView = 'password'
+    this.currentPassword = ''
+    this.nextPassword = ''
+    this.confirmPassword = ''
+    this.pageTip = ''
+  }
+
   /** 打开预留页面，当前不显示任何提示，避免主页面卡片出现半成品感。 */
   private openReservedView(): void {
   }
@@ -121,6 +137,57 @@ export struct MineRootTabClean {
     this.loggingOut = false
   }
 
+  /** 提交修改密码。 */
+  private async handleChangePassword(): Promise<void> {
+    if (this.changingPassword) {
+      return
+    }
+    if (this.currentPassword.length < 6) {
+      this.pageTip = '请输入正确的当前密码。'
+      return
+    }
+    if (this.nextPassword.length < 6) {
+      this.pageTip = '新密码长度不能少于 6 位。'
+      return
+    }
+    if (this.nextPassword !== this.confirmPassword) {
+      this.pageTip = '两次输入的新密码不一致。'
+      return
+    }
+    if (this.nextPassword === this.currentPassword) {
+      this.pageTip = '新密码不能与当前密码相同。'
+      return
+    }
+
+    this.changingPassword = true
+    this.pageTip = '正在修改密码...'
+
+    try {
+      await AuthApi.changePassword(this.token, this.currentPassword, this.nextPassword, this.confirmPassword)
+      await clearAuthState(this.getAbilityContext())
+      this.currentView = 'main'
+      this.currentPassword = ''
+      this.nextPassword = ''
+      this.confirmPassword = ''
+      this.pageTip = ''
+    } catch (err) {
+      this.pageTip = `修改密码失败：${JSON.stringify(err)}`
+    } finally {
+      this.changingPassword = false
+    }
+  }
+
+  /** 获取提示文案颜色。 */
+  private getTipColor(): string {
+    if (this.pageTip.indexOf('成功') >= 0) {
+      return SUCCESS
+    }
+    if (this.pageTip.indexOf('正在') >= 0) {
+      return TEXT_SUB
+    }
+    return DANGER
+  }
+
   /** 构建二级页面头部。 */
   @Builder
   private buildPageHeader(title: string, onBack: () => void): void {
@@ -145,6 +212,46 @@ export struct MineRootTabClean {
         .fontColor(TEXT_MAIN)
     }
     .width('100%')
+  }
+
+  /** 构建密码输入框。 */
+  @Builder
+  private buildPasswordInput(label: string, placeholder: string, value: string, onChange: (value: string) => void): void {
+    Column({ space: 7 }) {
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TEXT_LABEL)
+
+      TextInput({ text: value, placeholder: placeholder })
+        .width('100%')
+        .height(52)
+        .type(InputType.Password)
+        .fontSize(16)
+        .fontColor('#1D2F45')
+        .placeholderColor('#778CA7')
+        .placeholderFont({ size: 15 })
+        .backgroundColor(INPUT_BG)
+        .borderRadius(16)
+        .border({ width: 1, color: INPUT_BORDER })
+        .padding({ left: 15, right: 15 })
+        .onChange(onChange)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /** 构建页面提示。 */
+  @Builder
+  private buildPageTip(): void {
+    if (this.pageTip.trim().length > 0) {
+      Text(this.pageTip)
+        .width('100%')
+        .fontSize(12)
+        .lineHeight(18)
+        .fontColor(this.getTipColor())
+        .padding({ left: 4, right: 4 })
+    }
   }
 
   /** 构建账号与安全菜单行。 */
@@ -194,6 +301,7 @@ export struct MineRootTabClean {
 
       Column({ space: 10 }) {
         this.buildSecurityRow($r('sys.symbol.lock'), '修改密码', false, () => {
+          this.openPasswordView()
         })
 
         this.buildSecurityRow($r('sys.symbol.power'), this.loggingOut ? '退出中...' : '退出登录', true, () => {
@@ -206,13 +314,53 @@ export struct MineRootTabClean {
       .borderRadius(28)
       .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
 
-      if (this.pageTip.trim().length > 0) {
-        Text(this.pageTip)
+      this.buildPageTip()
+    }
+    .width('100%')
+  }
+
+  /** 构建修改密码页面。 */
+  @Builder
+  private buildPasswordContent(): void {
+    Column({ space: 16 }) {
+      this.buildPageHeader('修改密码', () => {
+        this.openSecurityView()
+      })
+
+      Column({ space: 14 }) {
+        this.buildPasswordInput('当前密码', '请输入当前密码', this.currentPassword, (value: string) => {
+          this.currentPassword = value
+        })
+        this.buildPasswordInput('新密码', '请输入新密码', this.nextPassword, (value: string) => {
+          this.nextPassword = value
+        })
+        this.buildPasswordInput('确认新密码', '请再次输入新密码', this.confirmPassword, (value: string) => {
+          this.confirmPassword = value
+        })
+
+        this.buildPageTip()
+
+        Button(this.changingPassword ? '提交中...' : '确认修改')
           .width('100%')
-          .fontSize(12)
-          .fontColor(TEXT_SUB)
-          .padding({ left: 4, right: 4 })
+          .height(48)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#FFFFFF')
+          .linearGradient({
+            angle: 90,
+            colors: [['#5FA7FF', 0], ['#2E79F4', 1]]
+          })
+          .borderRadius(18)
+          .enabled(!this.changingPassword)
+          .onClick(() => {
+            void this.handleChangePassword()
+          })
       }
+      .width('100%')
+      .padding(18)
+      .backgroundColor(CARD_BG)
+      .borderRadius(28)
+      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
     }
     .width('100%')
   }
@@ -263,6 +411,8 @@ export struct MineRootTabClean {
         Column({ space: 16 }) {
           if (this.currentView === 'security') {
             this.buildSecurityContent()
+          } else if (this.currentView === 'password') {
+            this.buildPasswordContent()
           } else {
             this.buildMainContent()
           }
