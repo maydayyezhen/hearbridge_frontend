@@ -7,6 +7,7 @@ const PRIMARY: string = '#1848DE'
 const TEXT_MAIN: string = '#11233C'
 const TEXT_SUB: string = '#7C8FA6'
 const DANGER: string = '#E5484D'
+const BORDER: string = '#E5EAF3'
 
 /**
  * 我的 / 账号与安全页面。
@@ -129,7 +130,7 @@ struct MineSecurityPage {
         .padding(8)
         .backgroundColor(CARD_BG)
         .borderRadius(28)
-        .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+        .border({ width: 1, color: BORDER })
 
         if (this.pageTip.trim().length > 0) {
           Text(this.pageTip)
@@ -147,7 +148,7 @@ struct MineSecurityPage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FBFF')
+    .backgroundColor('#FFFFFF')
     .scrollBar(BarState.Off)
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
