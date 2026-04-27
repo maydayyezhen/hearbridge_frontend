@@ -94,9 +94,11 @@ export struct MineRootTabClean {
       })
     } else {
       Scroll() {
-        this.buildMainContent()
-          .width('100%')
-          .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
+        Column() {
+          this.buildMainContent()
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
       }
       .width('100%')
       .height('100%')
