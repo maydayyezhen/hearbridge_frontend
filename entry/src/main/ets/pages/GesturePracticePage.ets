@@ -23,6 +23,10 @@ import {
   GestureAvatarPlaybackState
 } from '../service/gesture/GestureAvatarPlaybackService'
 
+const TEXT_MAIN: string = '#11233C'
+const SECONDARY_TEXT: string = '#6B7A90'
+const SURFACE: string = '#FFFFFF'
+const CARD_BG: string = '#F7F8FA'
 
 @Entry
 @Component
@@ -97,10 +101,8 @@ struct GesturePracticePage {
    * 当前统一为 10FPS，30 帧对应 3 秒动作窗口。
    */
 
-
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
-
 
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
@@ -129,7 +131,6 @@ struct GesturePracticePage {
    * 目标：让发送给后端的 JPEG 与手机自拍预览的左右效果一致。
    */
   private readonly shouldMirrorFrameBeforeSend: boolean = true
-
 
   aboutToAppear(): void {
     this.recognitionSession.setOnStateChange((state: GestureRecognitionSessionState): void => {
@@ -522,7 +523,6 @@ struct GesturePracticePage {
     }
   }
 
-
   private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
     if (!this.surfaceId) {
       return null
@@ -666,8 +666,6 @@ struct GesturePracticePage {
     await this.datasetCollectSession.discardPending()
   }
 
-
-
   /**
    * 开始手势实时识别。
    */
@@ -700,7 +698,6 @@ struct GesturePracticePage {
     await this.recognitionSession.stop(preserveStatus)
     this.stopCaptureLoop()
   }
-
 
   private async safeStopCamera(): Promise<void> {
     try {
@@ -740,27 +737,29 @@ struct GesturePracticePage {
 
   @Builder
   private buildTopBar(): void {
-    Row() {
-      Button('返回')
-        .fontSize(16)
-        .height(40)
-        .backgroundColor('#F3F4F6')
-        .fontColor('#222222')
-        .borderRadius(20)
-        .onClick(() => {
-          this.goBack()
-        })
+    Row({ space: 12 }) {
+      Button() {
+        SymbolGlyph($r('sys.symbol.chevron_backward'))
+          .fontSize(22)
+          .fontColor([SECONDARY_TEXT])
+      }
+      .width(40)
+      .height(40)
+      .borderRadius(14)
+      .backgroundColor(SURFACE)
+      .stateEffect(false)
+      .onClick(() => {
+        this.goBack()
+      })
 
       Text('手语训练')
-        .fontSize(24)
+        .fontSize(22)
         .fontWeight(FontWeight.Bold)
-        .margin({ left: 16 })
+        .fontColor(TEXT_MAIN)
 
       Blank()
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 12 })
-    .backgroundColor('#FFFFFF')
   }
 
   @Builder
@@ -810,57 +809,81 @@ struct GesturePracticePage {
     }
     .width('100%')
     .padding(18)
-    .backgroundColor('#F7F8FA')
+    .backgroundColor(CARD_BG)
     .borderRadius(20)
   }
 
+  @Builder
+  private buildPracticeContent(): void {
+    Scroll() {
+      Column({ space: 20 }) {
+        this.buildReferenceCard()
+        GestureAvatarCard({
+          avatarStatusText: this.avatarStatusText,
+          avatarErrorText: this.avatarErrorText,
+          sigmlUrl: this.sigmlUrl,
+          avatarController: this.avatarPlaybackSession.getController(),
+          onPlay: (): void => {
+            void this.playAvatar()
+          },
+          onReplay: (): void => {
+            void this.replayAvatar()
+          },
+          onPageEnd: (): void => {
+            this.avatarPlaybackSession.handlePageEnd(this.sigmlUrl)
+          }
+        })
+
+        Button('打开相机')
+          .width('100%')
+          .height(54)
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .borderRadius(27)
+          .backgroundColor('#111827')
+          .fontColor('#FFFFFF')
+          .onClick(async () => {
+            await this.openCameraOverlay()
+          })
+      }
+      .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .padding({ left: 0, right: 0, top: 6, bottom: 20 })
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(SURFACE)
+    .scrollBar(BarState.Off)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  @Builder
+  private buildContentArea(): void {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.buildPracticeContent()
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .clip(true)
+    .backgroundColor(SURFACE)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
 
   build() {
     Stack() {
-      Column() {
+      Column({ space: 16 }) {
         this.buildTopBar()
-
-        Scroll() {
-          Column({ space: 20 }) {
-            this.buildReferenceCard()
-            GestureAvatarCard({
-              avatarStatusText: this.avatarStatusText,
-              avatarErrorText: this.avatarErrorText,
-              sigmlUrl: this.sigmlUrl,
-              avatarController: this.avatarPlaybackSession.getController(),
-              onPlay: (): void => {
-                void this.playAvatar()
-              },
-              onReplay: (): void => {
-                void this.replayAvatar()
-              },
-              onPageEnd: (): void => {
-                this.avatarPlaybackSession.handlePageEnd(this.sigmlUrl)
-              }
-            })
-
-            Button('打开相机')
-              .width('100%')
-              .height(54)
-              .fontSize(18)
-              .fontWeight(FontWeight.Medium)
-              .borderRadius(27)
-              .backgroundColor('#111827')
-              .fontColor('#FFFFFF')
-              .onClick(async () => {
-                await this.openCameraOverlay()
-              })
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 16, bottom: 24 })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor('#FFFFFF')
+        this.buildContentArea()
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#FFFFFF')
+      .padding({ left: 16, right: 16, top: 16, bottom: 0 })
+      .backgroundColor(SURFACE)
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
       if (this.showCameraOverlay) {
         GestureCameraOverlay({
