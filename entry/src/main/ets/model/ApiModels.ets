@@ -45,6 +45,24 @@ export class GestureItemDto {
   }
 }
 
+/**
+ * 手语训练统一搜索结果。
+ */
+export class SignSearchResultDto {
+  /** 搜索关键词。 */
+  keyword: string
+  /** 匹配分类列表。 */
+  categories: CategoryDto[]
+  /** 匹配手势资源列表。 */
+  resources: GestureItemDto[]
+
+  constructor(keyword: string, categories: CategoryDto[], resources: GestureItemDto[]) {
+    this.keyword = keyword
+    this.categories = categories
+    this.resources = resources
+  }
+}
+
 export class AuthUserDto {
   id: number
   username: string
