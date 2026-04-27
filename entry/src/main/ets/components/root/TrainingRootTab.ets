@@ -51,6 +51,21 @@ export struct TrainingRootTab {
     return this.getKeyword().length > 0
   }
 
+  /** 判断是否需要显示清空按钮。 */
+  private shouldShowClearButton(): boolean {
+    return this.keywordInput.trim().length > 0 || this.isSearching()
+  }
+
+  /** 清空搜索并恢复默认状态。 */
+  private clearSearchState(): void {
+    this.keywordInput = ''
+    this.submittedKeyword = ''
+    this.searchedCategories = []
+    this.searchedResources = []
+    this.searchErrorText = ''
+    this.searching = false
+  }
+
   /** 提交搜索。 */
   private submitSearch(): void {
     const keyword = this.keywordInput.trim()
@@ -176,10 +191,26 @@ export struct TrainingRootTab {
         .onSubmit(() => {
           this.submitSearch()
         })
+
+      if (this.shouldShowClearButton()) {
+        Button() {
+          SymbolGlyph($r('sys.symbol.xmark_circle_fill'))
+            .fontSize(19)
+            .fontColor(['#9AACBF'])
+        }
+        .width(30)
+        .height(30)
+        .backgroundColor(Color.Transparent)
+        .borderRadius(15)
+        .stateEffect(false)
+        .onClick(() => {
+          this.clearSearchState()
+        })
+      }
     }
     .width('100%')
     .height(52)
-    .padding({ left: 10, right: 14 })
+    .padding({ left: 10, right: 10 })
     .backgroundColor(PAGE_BG)
     .borderRadius(20)
     .border({ width: 1, color: BORDER })
