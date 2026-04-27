@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/GestureListPage",
     "pages/GesturePracticePage",
+    "pages/GesturePracticePageRefactored",
     "pages/MineProfilePage",
     "pages/MineSecurityPage"
   ]
