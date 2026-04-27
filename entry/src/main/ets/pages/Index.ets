@@ -2,7 +2,7 @@ import { CategoryDto } from '../model/ApiModels'
 import { GestureApi } from '../api/GestureApi'
 import { HomeRootTab } from '../components/root/HomeRootTab'
 import { TrainingRootTab } from '../components/root/TrainingRootTab'
-import { MineRootTabClean } from '../components/root/MineRootTabClean'
+import { MineRootTabRouter } from '../components/root/MineRootTabRouter'
 import common from '@ohos.app.ability.common'
 import { restoreAuthState } from '../common/auth/AuthStorage'
 
@@ -87,7 +87,7 @@ struct Index {
   build() {
     Column() {
       if (!this.isLoggedIn) {
-        MineRootTabClean({
+        MineRootTabRouter({
           categoryCount: this.categoryList.length,
           loginOnly: true
         })
@@ -118,7 +118,7 @@ struct Index {
             .tabBar(this.buildTabItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill')))
 
           TabContent() {
-            MineRootTabClean({
+            MineRootTabRouter({
               categoryCount: this.categoryList.length,
               loginOnly: false
             })
