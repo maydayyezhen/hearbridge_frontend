@@ -5,13 +5,18 @@ import { AuthApi } from '../../api/AuthApi'
 import { clearAuthState, saveAuthState, saveUserState } from '../../common/auth/AuthStorage'
 import { readAvatarBytes, resolveAvatarFileName, resolveAvatarMimeType } from '../../common/file/AvatarFileReader'
 
-const PAGE_BG: string = '#F5F7FB'
+const PAGE_BG: string = '#F8FBFF'
 const CARD_BG: string = '#FFFFFF'
-const PRIMARY: string = '#2D6CDF'
+const PRIMARY: string = '#1848DE'
+const PRIMARY_LIGHT: string = '#3AAAE8'
 const PRIMARY_SOFT: string = '#EAF1FF'
-const TEXT_MAIN: string = '#111827'
-const TEXT_SUB: string = '#667085'
-const DANGER: string = '#D14343'
+const TEXT_MAIN: string = '#11233C'
+const TEXT_SUB: string = '#7C8FA6'
+const TEXT_LABEL: string = '#3F5672'
+const INPUT_BG: string = '#F8FBFF'
+const INPUT_BORDER: string = '#C8D8EA'
+const DANGER: string = '#E5484D'
+const SUCCESS: string = '#2BA471'
 const WARNING: string = '#D97706'
 
 @Component
@@ -252,23 +257,36 @@ export struct MineRootTab {
       : '开发者采集模式已关闭，普通用户不会使用 raw dataset 采集能力。'
   }
 
+  private getTipColor(): string {
+    if (this.tipText.indexOf('成功') >= 0) {
+      return SUCCESS
+    }
+    if (this.tipText.indexOf('正在') >= 0 || this.tipText.indexOf('已') === 0) {
+      return TEXT_SUB
+    }
+    return DANGER
+  }
+
   @Builder
   private buildInput(label: string, placeholder: string, value: string, password: boolean, onChange: (value: string) => void): void {
-    Column({ space: 8 }) {
+    Column({ space: 7 }) {
       Text(label)
         .fontSize(13)
-        .fontColor(TEXT_SUB)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TEXT_LABEL)
 
       TextInput({ text: value, placeholder: placeholder })
         .width('100%')
-        .height(46)
+        .height(52)
         .type(password ? InputType.Password : InputType.Normal)
-        .fontSize(15)
-        .fontColor(TEXT_MAIN)
-        .placeholderColor('#A4ACB9')
-        .backgroundColor('#F7F9FD')
-        .borderRadius(14)
-        .padding({ left: 14, right: 14 })
+        .fontSize(16)
+        .fontColor('#1D2F45')
+        .placeholderColor('#778CA7')
+        .placeholderFont({ size: 15 })
+        .backgroundColor(INPUT_BG)
+        .borderRadius(16)
+        .border({ width: 1, color: INPUT_BORDER })
+        .padding({ left: 15, right: 15 })
         .onChange(onChange)
     }
     .width('100%')
@@ -278,26 +296,28 @@ export struct MineRootTab {
   @Builder
   private buildModeSwitch(): void {
     Row() {
-      this.buildModeButton('login', '登录')
-      this.buildModeButton('register', '注册')
+      this.buildModeButton('login', '账号登录')
+      this.buildModeButton('register', '创建账号')
     }
     .width('100%')
-    .height(46)
+    .height(48)
     .padding(4)
-    .backgroundColor('#F0F4FA')
-    .borderRadius(16)
+    .backgroundColor('#EEF5FF')
+    .borderRadius(18)
+    .border({ width: 1, color: '#D6E5F8' })
   }
 
   @Builder
   private buildModeButton(mode: string, label: string): void {
     Button(label)
       .layoutWeight(1)
-      .height(38)
-      .fontSize(15)
+      .height(40)
+      .fontSize(14)
       .fontWeight(this.authMode === mode ? FontWeight.Medium : FontWeight.Regular)
       .fontColor(this.authMode === mode ? PRIMARY : TEXT_SUB)
       .backgroundColor(this.authMode === mode ? CARD_BG : Color.Transparent)
-      .borderRadius(12)
+      .borderRadius(14)
+      .shadow(this.authMode === mode ? { radius: 12, color: '#1A1848DE', offsetX: 0, offsetY: 4 } : { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 })
       .onClick(() => {
         this.authMode = mode
         this.tipText = ''
@@ -305,68 +325,133 @@ export struct MineRootTab {
   }
 
   @Builder
-  private buildAuthCard(): void {
-    Column({ space: 18 }) {
-      Column({ space: 10 }) {
-        Text('HearBridge')
+  private buildAuthBrand(): void {
+    Column({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Row()
+          .width(74)
+          .height(74)
+          .borderRadius(24)
+          .linearGradient({
+            angle: 135,
+            colors: [[PRIMARY_LIGHT, 0], [PRIMARY, 1]]
+          })
+          .shadow({ radius: 24, color: '#2A1848DE', offsetX: 0, offsetY: 10 })
+
+        Text('听')
           .fontSize(32)
           .fontWeight(FontWeight.Bold)
+          .fontColor('#FFFFFF')
+      }
+      .width(74)
+      .height(74)
+
+      Column({ space: 6 }) {
+        Text('HearBridge')
+          .width('100%')
+          .fontSize(34)
+          .fontWeight(FontWeight.Bold)
           .fontColor(TEXT_MAIN)
+          .textAlign(TextAlign.Center)
 
         Text('听桥手语学习与辅助交流系统')
-          .fontSize(17)
+          .width('100%')
+          .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor(PRIMARY)
+          .textAlign(TextAlign.Center)
 
-        Text('登录后可查看手语课程、播放数字人示范、使用实时识别与个人资料能力。')
-          .fontSize(14)
-          .lineHeight(22)
+        Text('登录后继续查看手语课程、数字人示范与实时识别训练。')
+          .width('100%')
+          .fontSize(13)
+          .lineHeight(20)
           .fontColor(TEXT_SUB)
+          .textAlign(TextAlign.Center)
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  private buildAuthCard(): void {
+    Column({ space: 22 }) {
+      this.buildAuthBrand()
 
       this.buildModeSwitch()
 
       if (this.authMode === 'login') {
-        this.buildInput('用户名', '输入用户名', this.loginUsername, false, (value: string) => {
-          this.loginUsername = value.trim()
-        })
-        this.buildInput('密码', '输入密码', this.loginPassword, true, (value: string) => {
-          this.loginPassword = value
-        })
-
-        Button(this.submitting ? '登录中...' : '登录并进入系统')
+        Text('账号密码登录')
           .width('100%')
-          .height(50)
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
+          .textAlign(TextAlign.Center)
+
+        Column({ space: 14 }) {
+          this.buildInput('用户名', '请输入用户名', this.loginUsername, false, (value: string) => {
+            this.loginUsername = value.trim()
+          })
+          this.buildInput('密码', '请输入密码', this.loginPassword, true, (value: string) => {
+            this.loginPassword = value
+          })
+        }
+        .width('100%')
+
+        Button(this.submitting ? '登录中...' : '立即登录')
+          .width('100%')
+          .height(54)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor('#FFFFFF')
-          .backgroundColor(PRIMARY)
-          .borderRadius(16)
+          .linearGradient({
+            angle: 105,
+            colors: this.submitting
+              ? [['#90B0D8', 0], ['#6E8EB8', 1]]
+              : [[PRIMARY_LIGHT, 0], [PRIMARY, 1]]
+          })
+          .borderRadius(18)
+          .shadow({ radius: 22, color: '#2A1848DE', offsetX: 0, offsetY: 10 })
           .enabled(!this.submitting)
           .onClick(() => {
             void this.handleLogin()
           })
       } else {
-        this.buildInput('用户名', '至少 3 位', this.registerUsername, false, (value: string) => {
-          this.registerUsername = value.trim()
-        })
-        this.buildInput('密码', '至少 6 位', this.registerPassword, true, (value: string) => {
-          this.registerPassword = value
-        })
-        this.buildInput('昵称', '显示在我的页面', this.registerNickname, false, (value: string) => {
-          this.registerNickname = value
-        })
+        Text('创建听桥账号')
+          .width('100%')
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
+          .textAlign(TextAlign.Center)
+
+        Column({ space: 14 }) {
+          this.buildInput('用户名', '至少 3 位', this.registerUsername, false, (value: string) => {
+            this.registerUsername = value.trim()
+          })
+          this.buildInput('密码', '至少 6 位', this.registerPassword, true, (value: string) => {
+            this.registerPassword = value
+          })
+          this.buildInput('昵称', '显示在我的页面', this.registerNickname, false, (value: string) => {
+            this.registerNickname = value
+          })
+        }
+        .width('100%')
 
         Button(this.submitting ? '注册中...' : '创建账号并进入')
           .width('100%')
-          .height(50)
+          .height(54)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor('#FFFFFF')
-          .backgroundColor(PRIMARY)
-          .borderRadius(16)
+          .linearGradient({
+            angle: 105,
+            colors: this.submitting
+              ? [['#90B0D8', 0], ['#6E8EB8', 1]]
+              : [[PRIMARY_LIGHT, 0], [PRIMARY, 1]]
+          })
+          .borderRadius(18)
+          .shadow({ radius: 22, color: '#2A1848DE', offsetX: 0, offsetY: 10 })
           .enabled(!this.submitting)
           .onClick(() => {
             void this.handleRegister()
@@ -376,15 +461,25 @@ export struct MineRootTab {
       if (this.tipText.trim().length > 0) {
         Text(this.tipText)
           .width('100%')
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.tipText.indexOf('失败') >= 0 ? DANGER : TEXT_SUB)
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor(this.getTipColor())
+          .textAlign(TextAlign.Start)
+          .margin({ top: -8 })
       }
+
+      Text('登录即代表同意《用户协议》与《隐私条款》')
+        .width('100%')
+        .fontSize(12)
+        .lineHeight(18)
+        .textAlign(TextAlign.Center)
+        .fontColor(TEXT_SUB)
     }
     .width('100%')
-    .padding(22)
+    .padding({ left: 22, right: 22, top: 26, bottom: 22 })
     .backgroundColor(CARD_BG)
-    .borderRadius(24)
+    .borderRadius(30)
+    .shadow({ radius: 30, color: '#18244B6B', offsetX: 0, offsetY: 12 })
   }
 
   @Builder
@@ -643,29 +738,42 @@ export struct MineRootTab {
   }
 
   build() {
-    Scroll() {
-      Column({ space: 16 }) {
-        if (this.isLoggedIn) {
-          this.buildProfileCard()
-          this.buildEditCard()
-          if (!this.loginOnly) {
-            this.buildDeveloperCard()
-          }
-        } else {
-          this.buildAuthCard()
-        }
+    Stack() {
+      Row()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [['#F8FBFF', 0], ['#F2F7FF', 0.42], ['#FFFFFF', 1]]
+        })
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
-        if (!this.loginOnly || !this.isLoggedIn) {
-          this.buildEndpointCard()
+      Scroll() {
+        Column({ space: 16 }) {
+          if (this.isLoggedIn) {
+            this.buildProfileCard()
+            this.buildEditCard()
+            if (!this.loginOnly) {
+              this.buildDeveloperCard()
+            }
+          } else {
+            this.buildAuthCard()
+          }
+
+          if (!this.loginOnly || !this.isLoggedIn) {
+            this.buildEndpointCard()
+          }
         }
+        .width('100%')
+        .padding({ left: 18, right: 18, top: this.loginOnly ? 34 : 16, bottom: 24 })
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
+      .height('100%')
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
-    .scrollBar(BarState.Off)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
