@@ -44,7 +44,7 @@ struct MineSecurityPage {
     } catch (_err) {
     }
 
-    await clearAuthState(this.getUIContext().getHostContext())
+    await clearAuthState(this.getUIContext().getHostContext()!)
     this.pageTip = ''
     this.loggingOut = false
     this.goBack()
