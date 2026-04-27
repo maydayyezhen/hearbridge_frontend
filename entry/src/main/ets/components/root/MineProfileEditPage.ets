@@ -6,7 +6,7 @@ import { clearAuthState, saveUserState } from '../../common/auth/AuthStorage'
 import { readAvatarBytes, resolveAvatarFileName, resolveAvatarMimeType } from '../../common/file/AvatarFileReader'
 import { MineProfileEditVisualCard } from './MineProfileVisualCards'
 
-const PAGE_BG: string = '#F8FBFF'
+const PAGE_BG: string = '#FFFFFF'
 const TEXT_MAIN: string = '#11233C'
 
 /**
