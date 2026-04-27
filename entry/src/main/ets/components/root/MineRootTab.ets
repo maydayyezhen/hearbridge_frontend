@@ -12,10 +12,12 @@ const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#111827'
 const TEXT_SUB: string = '#667085'
 const DANGER: string = '#D14343'
+const WARNING: string = '#D97706'
 
 @Component
 export struct MineRootTab {
   @Prop categoryCount: number = 0
+  @Prop loginOnly: boolean = false
 
   @StorageLink('auth.isLoggedIn') isLoggedIn: boolean = false
   @StorageLink('auth.token') token: string = ''
@@ -27,6 +29,8 @@ export struct MineRootTab {
   @StorageLink('recent.practice.code') recentPracticeCode: string = ''
   @StorageLink('recent.practice.name') recentPracticeName: string = ''
 
+  @StorageLink('developer.datasetCollect.enabled') enableDatasetCollect: boolean = false
+
   @State authMode: string = 'login'
   @State loginUsername: string = ''
   @State loginPassword: string = ''
@@ -37,12 +41,14 @@ export struct MineRootTab {
   @State selectedAvatarUri: string = ''
   @State tipText: string = ''
   @State avatarTip: string = ''
+  @State developerTip: string = ''
   @State submitting: boolean = false
   @State uploadingAvatar: boolean = false
   @State pickingAvatar: boolean = false
 
   aboutToAppear(): void {
     this.editNickname = this.nickname
+    AppStorage.setOrCreate(AppConfig.DATASET_COLLECT_STORAGE_KEY, AppConfig.DEFAULT_ENABLE_DATASET_COLLECT)
   }
 
   private getAbilityContext(): common.BaseContext {
@@ -237,6 +243,15 @@ export struct MineRootTab {
     this.submitting = false
   }
 
+  private handleToggleDatasetCollect(): void {
+    const nextValue = !this.enableDatasetCollect
+    AppStorage.setOrCreate(AppConfig.DATASET_COLLECT_STORAGE_KEY, nextValue)
+    this.enableDatasetCollect = nextValue
+    this.developerTip = nextValue
+      ? '开发者采集模式已开启，手势练习页可采集 raw dataset 样本。'
+      : '开发者采集模式已关闭，普通用户不会使用 raw dataset 采集能力。'
+  }
+
   @Builder
   private buildInput(label: string, placeholder: string, value: string, password: boolean, onChange: (value: string) => void): void {
     Column({ space: 8 }) {
@@ -292,13 +307,18 @@ export struct MineRootTab {
   @Builder
   private buildAuthCard(): void {
     Column({ space: 18 }) {
-      Column({ space: 8 }) {
-        Text('登录 HearBridge')
-          .fontSize(28)
+      Column({ space: 10 }) {
+        Text('HearBridge')
+          .fontSize(32)
           .fontWeight(FontWeight.Bold)
           .fontColor(TEXT_MAIN)
 
-        Text('账号只保留用户名、昵称和头像，轻一点，也够用。')
+        Text('听桥手语学习与辅助交流系统')
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY)
+
+        Text('登录后可查看手语课程、播放数字人示范、使用实时识别与个人资料能力。')
           .fontSize(14)
           .lineHeight(22)
           .fontColor(TEXT_SUB)
@@ -316,7 +336,7 @@ export struct MineRootTab {
           this.loginPassword = value
         })
 
-        Button(this.submitting ? '登录中...' : '登录')
+        Button(this.submitting ? '登录中...' : '登录并进入系统')
           .width('100%')
           .height(50)
           .fontSize(16)
@@ -339,7 +359,7 @@ export struct MineRootTab {
           this.registerNickname = value
         })
 
-        Button(this.submitting ? '注册中...' : '创建账号')
+        Button(this.submitting ? '注册中...' : '创建账号并进入')
           .width('100%')
           .height(50)
           .fontSize(16)
@@ -362,9 +382,9 @@ export struct MineRootTab {
       }
     }
     .width('100%')
-    .padding(20)
+    .padding(22)
     .backgroundColor(CARD_BG)
-    .borderRadius(22)
+    .borderRadius(24)
   }
 
   @Builder
@@ -547,6 +567,57 @@ export struct MineRootTab {
   }
 
   @Builder
+  private buildDeveloperCard(): void {
+    Column({ space: 14 }) {
+      Row() {
+        Column({ space: 6 }) {
+          Text('开发者采集模式')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(TEXT_MAIN)
+
+          Text('开启后，手势练习页可采集 raw dataset 样本，用于管理端同步、特征转换和模型训练。')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor(TEXT_SUB)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Button(this.enableDatasetCollect ? '已开启' : '已关闭')
+          .width(90)
+          .height(38)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.enableDatasetCollect ? '#FFFFFF' : WARNING)
+          .backgroundColor(this.enableDatasetCollect ? WARNING : '#FFF7ED')
+          .borderRadius(14)
+          .onClick(() => {
+            this.handleToggleDatasetCollect()
+          })
+      }
+      .width('100%')
+
+      Text(this.enableDatasetCollect ? '当前会显示 raw 样本采集入口，请仅在管理员采集数据时使用。' : '普通用户模式下不会连接 Python raw dataset 采集服务。')
+        .fontSize(12)
+        .lineHeight(18)
+        .fontColor(this.enableDatasetCollect ? WARNING : TEXT_SUB)
+
+      if (this.developerTip.trim().length > 0) {
+        Text(this.developerTip)
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor(TEXT_SUB)
+      }
+    }
+    .width('100%')
+    .padding(20)
+    .backgroundColor(CARD_BG)
+    .borderRadius(22)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private buildEndpointCard(): void {
     Column({ space: 10 }) {
       Text('服务')
@@ -577,14 +648,19 @@ export struct MineRootTab {
         if (this.isLoggedIn) {
           this.buildProfileCard()
           this.buildEditCard()
+          if (!this.loginOnly) {
+            this.buildDeveloperCard()
+          }
         } else {
           this.buildAuthCard()
         }
 
-        this.buildEndpointCard()
+        if (!this.loginOnly || !this.isLoggedIn) {
+          this.buildEndpointCard()
+        }
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 16, bottom: 24 })
+      .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
     }
     .width('100%')
     .height('100%')
