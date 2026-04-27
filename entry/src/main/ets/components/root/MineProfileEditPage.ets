@@ -7,10 +7,13 @@ import { readAvatarBytes, resolveAvatarFileName, resolveAvatarMimeType } from '.
 import { MineProfileEditVisualCard } from './MineProfileVisualCards'
 
 const PAGE_BG: string = '#FFFFFF'
-const TEXT_MAIN: string = '#11233C'
 
 /**
- * 我的页账号资料编辑页面。
+ * 我的页账号资料编辑内容组件。
+ *
+ * 说明：
+ * 1. 这里只保留资料编辑表单内容。
+ * 2. 页面顶部栏统一由 MineProfilePage 按二级页模板构建。
  */
 @Component
 export struct MineProfileEditPage {
@@ -37,9 +40,6 @@ export struct MineProfileEditPage {
   @State uploadingAvatar: boolean = false
   /** 是否正在退出登录。 */
   @State loggingOut: boolean = false
-
-  /** 返回上一页回调。 */
-  onBack: () => void = () => {}
 
   aboutToAppear(): void {
     this.editNickname = this.nickname
@@ -182,36 +182,8 @@ export struct MineProfileEditPage {
     router.back()
   }
 
-  /** 构建页面头部。 */
-  @Builder
-  private buildPageHeader(): void {
-    Row({ space: 12 }) {
-      Button() {
-        SymbolGlyph($r('sys.symbol.chevron_backward'))
-          .fontSize(22)
-          .fontColor(['#6B7A90'])
-      }
-      .width(40)
-      .height(40)
-      .borderRadius(14)
-      .backgroundColor('#FFFFFF')
-      .stateEffect(false)
-      .onClick(() => {
-        this.onBack()
-      })
-
-      Text('账号资料')
-        .fontSize(22)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(TEXT_MAIN)
-    }
-    .width('100%')
-  }
-
   build() {
-    Column({ space: 16 }) {
-      this.buildPageHeader()
-
+    Column() {
       MineProfileEditVisualCard({
         avatarUrl: this.getVisibleAvatarUri(),
         avatarText: this.getAvatarText(),
