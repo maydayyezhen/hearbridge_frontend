@@ -9,6 +9,7 @@ const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#111827'
 const TEXT_SUB: string = '#667085'
 const BORDER: string = '#E5EAF3'
+const ICON_MUTED: string = '#9AACBF'
 
 /**
  * 训练中心根 Tab。
@@ -165,15 +166,9 @@ export struct TrainingRootTab {
   private buildSearchBar(): void {
     Row({ space: 10 }) {
       Stack({ alignContent: Alignment.Center }) {
-        Row()
-          .width(30)
-          .height(30)
-          .backgroundColor(PRIMARY_SOFT)
-          .borderRadius(15)
-
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontSize(15)
-          .fontColor([PRIMARY])
+          .fontSize(18)
+          .fontColor([ICON_MUTED])
       }
       .width(30)
       .height(30)
@@ -183,7 +178,7 @@ export struct TrainingRootTab {
         .height(38)
         .fontSize(15)
         .backgroundColor(Color.Transparent)
-        .placeholderColor('#9AACBF')
+        .placeholderColor(ICON_MUTED)
         .enterKeyType(EnterKeyType.Search)
         .onChange((value: string) => {
           this.keywordInput = value
@@ -196,7 +191,7 @@ export struct TrainingRootTab {
         Button() {
           SymbolGlyph($r('sys.symbol.xmark_circle_fill'))
             .fontSize(19)
-            .fontColor(['#9AACBF'])
+            .fontColor([ICON_MUTED])
         }
         .width(30)
         .height(30)
