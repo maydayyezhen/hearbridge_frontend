@@ -17,6 +17,12 @@ class ProfilePayload {
   nickname: string = ''
 }
 
+class PasswordPayload {
+  oldPassword: string = ''
+  newPassword: string = ''
+  confirmPassword: string = ''
+}
+
 export class AuthApi {
   static async login(username: string, password: string): Promise<AuthResponseDto> {
     const payload = new LoginPayload()
@@ -45,6 +51,14 @@ export class AuthApi {
     payload.nickname = nickname
     const text = await HttpClient.put('/app/user/profile', payload, token)
     return AuthApi.parseUser(JSON.parse(text) as Record<string, Object>)
+  }
+
+  static async changePassword(token: string, oldPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
+    const payload = new PasswordPayload()
+    payload.oldPassword = oldPassword
+    payload.newPassword = newPassword
+    payload.confirmPassword = confirmPassword
+    await HttpClient.put('/app/user/password', payload, token)
   }
 
   static async uploadAvatar(token: string, fileName: string, mimeType: string, bytes: ArrayBuffer): Promise<AuthUserDto> {
