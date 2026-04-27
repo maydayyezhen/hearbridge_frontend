@@ -17,11 +17,17 @@ export struct GestureAvatarCard {
   /** 当前动作 SiGML 地址。 */
   @Prop sigmlUrl: string = ''
 
-  /** 数字人视窗高度。 */
-  @Prop avatarViewportHeight: number = 360
+  /**
+   * 数字人视窗高度。
+   *
+   * 说明：
+   * 当前手语训练页希望尽量保持单屏不可滚动，
+   * 所以默认高度采用紧凑值；如后续有独立大屏预览页，可由父组件显式传入更大高度。
+   */
+  @Prop avatarViewportHeight: number = 240
 
   /** 是否使用紧凑展示模式。 */
-  @Prop compact: boolean = false
+  @Prop compact: boolean = true
 
   /** 数字人 WebView 控制器。 */
   avatarController: webview.WebviewController = new webview.WebviewController()
