@@ -91,19 +91,6 @@ export struct MineProfileHeaderCard {
             colors: [['#D9ECFF', 0], ['#BBD9FF', 0.52], ['#F7FBFF', 1]]
           })
           .borderRadius(28)
-
-        Column({ space: 6 }) {
-          Text('我的')
-            .fontSize(14)
-            .fontColor('rgba(17,35,60,0.58)')
-
-          Text('HearBridge')
-            .fontSize(25)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(TEXT_MAIN)
-        }
-        .padding({ left: 20, top: 18 })
-        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .height(136)
@@ -184,7 +171,7 @@ export struct MineMenuVisualCard {
   onOpenAboutHearBridge: () => void = () => {}
 
   @Builder
-  private buildMenuRow(icon: Resource, title: string, subtitle: string, onClickAction: () => void): void {
+  private buildMenuRow(icon: Resource, title: string, onClickAction: () => void): void {
     Row({ space: 12 }) {
       Stack({ alignContent: Alignment.Center }) {
         Row()
@@ -200,27 +187,18 @@ export struct MineMenuVisualCard {
       .width(34)
       .height(34)
 
-      Column({ space: 4 }) {
-        Text(title)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(TEXT_MAIN)
-
-        Text(subtitle)
-          .fontSize(12)
-          .fontColor(TEXT_SUB)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      Text(title)
+        .layoutWeight(1)
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TEXT_MAIN)
 
       SymbolGlyph($r('sys.symbol.chevron_forward'))
         .fontSize(15)
         .fontColor(['#95A7C0'])
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .padding({ left: 16, right: 16, top: 16, bottom: 16 })
     .backgroundColor('#FFFFFF')
     .borderRadius(18)
     .onClick(() => {
@@ -230,11 +208,11 @@ export struct MineMenuVisualCard {
 
   build() {
     Column({ space: 10 }) {
-      this.buildMenuRow($r('sys.symbol.star'), '我的收藏', '查看收藏的课程与训练项', this.onOpenFavorites)
-      this.buildMenuRow($r('sys.symbol.person'), '账号资料', '修改头像、昵称与个人资料', this.onOpenAccountProfile)
-      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', '管理登录状态与账号安全', this.onOpenAccountSecurity)
-      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', '反馈问题或查看使用帮助', this.onOpenHelpFeedback)
-      this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', '了解 HearBridge 项目', this.onOpenAboutHearBridge)
+      this.buildMenuRow($r('sys.symbol.star'), '我的收藏', this.onOpenFavorites)
+      this.buildMenuRow($r('sys.symbol.person'), '账号资料', this.onOpenAccountProfile)
+      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', this.onOpenAccountSecurity)
+      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', this.onOpenHelpFeedback)
+      this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', this.onOpenAboutHearBridge)
     }
     .width('100%')
     .padding(8)
