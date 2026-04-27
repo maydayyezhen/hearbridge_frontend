@@ -1,7 +1,7 @@
 import common from '@ohos.app.ability.common'
 import photoAccessHelper from '@ohos.file.photoAccessHelper'
 import { AuthApi } from '../../api/AuthApi'
-import { saveUserState } from '../../common/auth/AuthStorage'
+import { clearAuthState, saveUserState } from '../../common/auth/AuthStorage'
 import { readAvatarBytes, resolveAvatarFileName, resolveAvatarMimeType } from '../../common/file/AvatarFileReader'
 import { MineProfileEditVisualCard } from './MineProfileVisualCards'
 
@@ -34,11 +34,11 @@ export struct MineProfileEditPage {
   @State pickingAvatar: boolean = false
   /** 是否正在上传头像。 */
   @State uploadingAvatar: boolean = false
+  /** 是否正在退出登录。 */
+  @State loggingOut: boolean = false
 
   /** 返回上一页回调。 */
   onBack: () => void = () => {}
-  /** 退出登录回调。 */
-  onLogout: () => void = () => {}
 
   aboutToAppear(): void {
     this.editNickname = this.nickname
@@ -160,6 +160,27 @@ export struct MineProfileEditPage {
     }
   }
 
+  /** 退出登录。 */
+  private async handleLogout(): Promise<void> {
+    if (this.loggingOut) {
+      return
+    }
+
+    this.loggingOut = true
+    this.pageTip = '正在退出登录...'
+
+    try {
+      if (this.token.trim().length > 0) {
+        await AuthApi.logout(this.token)
+      }
+    } catch (_err) {
+    }
+
+    await clearAuthState(this.getAbilityContext())
+    AppStorage.setOrCreate('mine.currentView', 'main')
+    this.loggingOut = false
+  }
+
   /** 构建页面头部。 */
   @Builder
   private buildPageHeader(): void {
@@ -213,7 +234,7 @@ export struct MineProfileEditPage {
           void this.handleSaveProfile()
         },
         onLogout: (): void => {
-          this.onLogout()
+          void this.handleLogout()
         }
       })
     }
