@@ -6,8 +6,10 @@ const CARD_BG: string = '#FFFFFF'
 const PRIMARY: string = '#1848DE'
 const TEXT_MAIN: string = '#11233C'
 const TEXT_SUB: string = '#7C8FA6'
+const SECONDARY_TEXT: string = '#6B7A90'
 const DANGER: string = '#E5484D'
 const BORDER: string = '#E5EAF3'
+const SURFACE: string = '#FFFFFF'
 
 /**
  * 我的 / 账号与安全页面。
@@ -52,17 +54,17 @@ struct MineSecurityPage {
   }
 
   @Builder
-  private buildPageHeader(): void {
+  private buildTopBar(): void {
     Row({ space: 12 }) {
       Button() {
         SymbolGlyph($r('sys.symbol.chevron_backward'))
           .fontSize(22)
-          .fontColor(['#6B7A90'])
+          .fontColor([SECONDARY_TEXT])
       }
       .width(40)
       .height(40)
       .borderRadius(14)
-      .backgroundColor('#FFFFFF')
+      .backgroundColor(SURFACE)
       .stateEffect(false)
       .onClick(() => {
         this.goBack()
@@ -72,6 +74,8 @@ struct MineSecurityPage {
         .fontSize(22)
         .fontWeight(FontWeight.Bold)
         .fontColor(TEXT_MAIN)
+
+      Blank()
     }
     .width('100%')
   }
@@ -112,44 +116,73 @@ struct MineSecurityPage {
     })
   }
 
-  build() {
-    Scroll() {
-      Column({ space: 16 }) {
-        this.buildPageHeader()
+  @Builder
+  private buildSecurityContent(): void {
+    Column({ space: 16 }) {
+      Column({ space: 10 }) {
+        this.buildSecurityRow($r('sys.symbol.lock'), '修改密码', false, () => {
+          this.pageTip = '修改密码页面待接入。'
+        })
 
-        Column({ space: 10 }) {
-          this.buildSecurityRow($r('sys.symbol.lock'), '修改密码', false, () => {
-            this.pageTip = '修改密码页面待接入。'
-          })
-
-          this.buildSecurityRow($r('sys.symbol.power'), this.loggingOut ? '退出中...' : '退出登录', true, () => {
-            void this.handleLogout()
-          })
-        }
-        .width('100%')
-        .padding(8)
-        .backgroundColor(CARD_BG)
-        .borderRadius(28)
-        .border({ width: 1, color: BORDER })
-
-        if (this.pageTip.trim().length > 0) {
-          Text(this.pageTip)
-            .width('100%')
-            .fontSize(12)
-            .fontColor(TEXT_SUB)
-            .padding({ left: 4, right: 4 })
-        }
+        this.buildSecurityRow($r('sys.symbol.power'), this.loggingOut ? '退出中...' : '退出登录', true, () => {
+          void this.handleLogout()
+        })
       }
       .width('100%')
-      .constraintSize({ minHeight: '100%' })
-      .padding({ left: 16, right: 16, top: 16, bottom: 24 })
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start)
+      .padding(8)
+      .backgroundColor(CARD_BG)
+      .borderRadius(28)
+      .border({ width: 1, color: BORDER })
+
+      if (this.pageTip.trim().length > 0) {
+        Text(this.pageTip)
+          .width('100%')
+          .fontSize(12)
+          .fontColor(TEXT_SUB)
+          .padding({ left: 4, right: 4 })
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private buildContentArea(): void {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Scroll() {
+        Column() {
+          this.buildSecurityContent()
+        }
+        .width('100%')
+        .constraintSize({ minHeight: '100%' })
+        .padding({ left: 0, right: 0, top: 6, bottom: 20 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(SURFACE)
+      .scrollBar(BarState.Off)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .clip(true)
+    .backgroundColor(SURFACE)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  build() {
+    Column({ space: 16 }) {
+      this.buildTopBar()
+      this.buildContentArea()
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#FFFFFF')
-    .scrollBar(BarState.Off)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+    .padding({ left: 16, right: 16, top: 16, bottom: 0 })
+    .backgroundColor(SURFACE)
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Start)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
