@@ -144,12 +144,36 @@ struct GesturePracticePageRefactored {
   }
 
   aboutToDisappear(): void {
+    this.showCameraOverlay = false
+    this.surfaceId = ''
+    this.previewStarted = false
+    this.topSafeInsetVp = 0
+    this.bottomSafeInsetVp = 0
     this.stopCaptureLoop()
+    void this.updateWindowImmersive(false)
     void this.safeStopCamera()
+    void this.stopGestureRecognition(true)
+    void this.stopDatasetCollect(true)
     void this.recognitionSession.disconnect()
     void this.datasetCollectSession.disconnect()
     void this.stopAvatar()
     this.avatarPlaybackSession.markPageNotReady()
+  }
+
+  /**
+   * 系统返回拦截。
+   *
+   * 说明：
+   * 相机 overlay 打开后页面会进入全屏沉浸模式。
+   * 如果用户从屏幕边缘触发系统返回，必须先关闭 overlay 并恢复窗口安全区，
+   * 不能让页面直接退出，否则整个应用可能残留 full screen 状态。
+   */
+  onBackPress(): boolean {
+    if (this.showCameraOverlay) {
+      void this.closeCameraOverlay()
+      return true
+    }
+    return false
   }
 
   /** 读取路由参数。 */
@@ -236,6 +260,11 @@ struct GesturePracticePageRefactored {
 
   /** 返回上一页。 */
   private goBack(): void {
+    if (this.showCameraOverlay) {
+      void this.closeCameraOverlay()
+      return
+    }
+
     try {
       router.back()
     } catch (err) {
