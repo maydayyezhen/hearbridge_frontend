@@ -4,7 +4,6 @@ import { CategoryDto, GestureItemDto } from '../../model/ApiModels'
 import { GestureListPageParams, GesturePracticePageParams } from '../../model/GestureModels'
 
 const PAGE_BG: string = '#FFFFFF'
-const CARD_BG: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
 const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#111827'
@@ -18,6 +17,7 @@ const BORDER: string = '#E5EAF3'
  * 1. 作为训练资源搜索入口，而不是传统说明型首页。
  * 2. 搜索框只负责输入；用户点击键盘搜索按钮后才提交搜索。
  * 3. 已提交搜索时调用后端统一搜索接口，同时展示分类和具体手势资源。
+ * 4. 视觉语言统一为白底线性列表，减少卡片堆叠感。
  */
 @Component
 export struct TrainingRootTab {
@@ -180,7 +180,7 @@ export struct TrainingRootTab {
     .width('100%')
     .height(52)
     .padding({ left: 10, right: 14 })
-    .backgroundColor(CARD_BG)
+    .backgroundColor(PAGE_BG)
     .borderRadius(20)
     .border({ width: 1, color: BORDER })
   }
@@ -190,138 +190,154 @@ export struct TrainingRootTab {
   private buildSectionTitle(title: string, count: number): void {
     Row() {
       Text(title)
-        .fontSize(16)
+        .fontSize(15)
         .fontWeight(FontWeight.Bold)
         .fontColor(TEXT_MAIN)
 
       Text(` ${count}`)
-        .fontSize(13)
+        .fontSize(12)
         .fontColor(TEXT_SUB)
 
       Blank()
     }
     .width('100%')
+    .padding({ top: 6, bottom: 4 })
   }
 
-  /** 构建分类结果卡片。 */
+  /** 构建线性分割线。 */
+  @Builder
+  private buildDivider(): void {
+    Row()
+      .width('100%')
+      .height(1)
+      .backgroundColor(BORDER)
+  }
+
+  /** 构建分类结果行。 */
   @Builder
   private buildCategoryResultCard(item: CategoryDto): void {
-    Row({ space: 14 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Text(this.buildBadgeText(item))
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(PRIMARY)
-      }
-      .width(52)
-      .height(52)
-      .borderRadius(18)
-      .backgroundColor(PRIMARY_SOFT)
-
-      Column({ space: 5 }) {
-        Text(item.nameZh.trim().length > 0 ? item.nameZh : item.code)
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(TEXT_MAIN)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Text(item.code)
-          .fontSize(13)
-          .fontColor(TEXT_SUB)
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
-
-      Text('分类')
-        .fontSize(14)
-        .fontColor(PRIMARY)
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(CARD_BG)
-    .borderRadius(20)
-    .border({ width: 1, color: BORDER })
-    .onClick(() => {
-      this.openCategory(item)
-    })
-  }
-
-  /** 构建手势资源结果卡片。 */
-  @Builder
-  private buildResourceResultCard(item: GestureItemDto): void {
-    Row({ space: 14 }) {
-      if (item.coverUrl !== '') {
-        Image(item.coverUrl)
-          .width(52)
-          .height(52)
-          .borderRadius(18)
-          .objectFit(ImageFit.Cover)
-          .backgroundColor(PRIMARY_SOFT)
-      } else {
+    Column() {
+      Row({ space: 14 }) {
         Stack({ alignContent: Alignment.Center }) {
-          Text(this.buildResourceBadgeText(item))
-            .fontSize(18)
+          Text(this.buildBadgeText(item))
+            .fontSize(15)
             .fontWeight(FontWeight.Bold)
             .fontColor(PRIMARY)
         }
-        .width(52)
-        .height(52)
-        .borderRadius(18)
+        .width(40)
+        .height(40)
+        .borderRadius(14)
         .backgroundColor(PRIMARY_SOFT)
-      }
 
-      Column({ space: 5 }) {
-        Text(item.nameZh.trim().length > 0 ? item.nameZh : item.code)
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(TEXT_MAIN)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column({ space: 4 }) {
+          Text(item.nameZh.trim().length > 0 ? item.nameZh : item.code)
+            .fontSize(17)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Text(`${item.code} · ${item.categoryCode}`)
+          Text(item.code)
+            .fontSize(12)
+            .fontColor(TEXT_SUB)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
+
+        Text('分类')
           .fontSize(13)
           .fontColor(TEXT_SUB)
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
+      .width('100%')
+      .padding({ top: 13, bottom: 13 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.openCategory(item)
+      })
 
-      Text('练习')
-        .fontSize(14)
-        .fontColor(PRIMARY)
+      this.buildDivider()
     }
     .width('100%')
-    .padding(16)
-    .backgroundColor(CARD_BG)
-    .borderRadius(20)
-    .border({ width: 1, color: BORDER })
-    .onClick(() => {
-      this.openGestureResource(item)
-    })
+    .backgroundColor(PAGE_BG)
   }
 
-  /** 构建搜索状态卡片。 */
+  /** 构建手势资源结果行。 */
+  @Builder
+  private buildResourceResultCard(item: GestureItemDto): void {
+    Column() {
+      Row({ space: 14 }) {
+        if (item.coverUrl !== '') {
+          Image(item.coverUrl)
+            .width(40)
+            .height(40)
+            .borderRadius(14)
+            .objectFit(ImageFit.Cover)
+            .backgroundColor(PRIMARY_SOFT)
+        } else {
+          Stack({ alignContent: Alignment.Center }) {
+            Text(this.buildResourceBadgeText(item))
+              .fontSize(15)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(PRIMARY)
+          }
+          .width(40)
+          .height(40)
+          .borderRadius(14)
+          .backgroundColor(PRIMARY_SOFT)
+        }
+
+        Column({ space: 4 }) {
+          Text(item.nameZh.trim().length > 0 ? item.nameZh : item.code)
+            .fontSize(17)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(`${item.code} · ${item.categoryCode}`)
+            .fontSize(12)
+            .fontColor(TEXT_SUB)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
+
+        Text('练习')
+          .fontSize(13)
+          .fontColor(PRIMARY)
+      }
+      .width('100%')
+      .padding({ top: 13, bottom: 13 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.openGestureResource(item)
+      })
+
+      this.buildDivider()
+    }
+    .width('100%')
+    .backgroundColor(PAGE_BG)
+  }
+
+  /** 构建搜索状态区域。 */
   @Builder
   private buildStateCard(title: string, description: string): void {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       Text(title)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
+        .fontSize(17)
+        .fontWeight(FontWeight.Medium)
         .fontColor(TEXT_MAIN)
 
       Text(description)
-        .fontSize(14)
-        .lineHeight(22)
+        .fontSize(13)
+        .lineHeight(21)
         .fontColor(TEXT_SUB)
         .textAlign(TextAlign.Center)
     }
     .width('100%')
-    .padding({ left: 18, right: 18, top: 28, bottom: 28 })
-    .backgroundColor(CARD_BG)
-    .borderRadius(24)
-    .border({ width: 1, color: BORDER })
+    .padding({ left: 18, right: 18, top: 32, bottom: 32 })
+    .backgroundColor(PAGE_BG)
     .alignItems(HorizontalAlign.Center)
   }
 
@@ -335,7 +351,7 @@ export struct TrainingRootTab {
     } else if (this.getDefaultCategories().length === 0) {
       this.buildStateCard('暂无训练分类', '当前还没有可用训练分类。')
     } else {
-      Column({ space: 14 }) {
+      Column({ space: 0 }) {
         this.buildSectionTitle('全部分类', this.getDefaultCategories().length)
 
         ForEach(
@@ -360,9 +376,9 @@ export struct TrainingRootTab {
     } else if (this.searchedResources.length === 0 && this.searchedCategories.length === 0) {
       this.buildStateCard('没有匹配结果', '换个关键词后点击键盘搜索按钮再试试。')
     } else {
-      Column({ space: 16 }) {
+      Column({ space: 18 }) {
         if (this.searchedResources.length > 0) {
-          Column({ space: 14 }) {
+          Column({ space: 0 }) {
             this.buildSectionTitle('手势资源', this.searchedResources.length)
             ForEach(
               this.searchedResources,
@@ -376,7 +392,7 @@ export struct TrainingRootTab {
         }
 
         if (this.searchedCategories.length > 0) {
-          Column({ space: 14 }) {
+          Column({ space: 0 }) {
             this.buildSectionTitle('相关分类', this.searchedCategories.length)
             ForEach(
               this.searchedCategories,
