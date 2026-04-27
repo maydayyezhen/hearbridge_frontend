@@ -17,13 +17,18 @@ struct MineProfilePage {
 
   build() {
     Scroll() {
-      MineProfileEditPage({
-        onBack: (): void => {
-          this.goBack()
-        }
-      })
+      Column() {
+        MineProfileEditPage({
+          onBack: (): void => {
+            this.goBack()
+          }
+        })
+      }
       .width('100%')
+      .constraintSize({ minHeight: '100%' })
       .padding({ left: 16, right: 16, top: 16, bottom: 24 })
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
     }
     .width('100%')
     .height('100%')
