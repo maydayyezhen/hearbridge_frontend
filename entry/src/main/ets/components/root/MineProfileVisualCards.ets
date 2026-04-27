@@ -4,7 +4,6 @@ const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#11233C'
 const TEXT_SUB: string = '#7C8FA6'
 const DANGER: string = '#E5484D'
-const WARNING: string = '#D97706'
 
 /**
  * 我的页头像展示组件。
@@ -136,11 +135,11 @@ export struct MineProfileHeaderCard {
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-            Text(`@${this.username}`)
+            Text(this.username.trim().length > 0 ? `@${this.username}` : '欢迎使用听桥')
               .fontSize(14)
               .fontColor(TEXT_SUB)
 
-            Text(`ID ${this.userId}`)
+            Text(this.userId > 0 ? `ID ${this.userId}` : '还没有登录用户编号')
               .fontSize(12)
               .fontColor('#9AA8BA')
           }
@@ -162,6 +161,83 @@ export struct MineProfileHeaderCard {
       .borderRadius(28)
     }
     .width('100%')
+    .backgroundColor(CARD_BG)
+    .borderRadius(28)
+    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+  }
+}
+
+/**
+ * 我的页菜单卡片。
+ */
+@Component
+export struct MineMenuVisualCard {
+  /** 打开收藏页回调。 */
+  onOpenFavorites: () => void = () => {}
+  /** 打开账号资料回调。 */
+  onOpenAccountProfile: () => void = () => {}
+  /** 打开账号安全回调。 */
+  onOpenAccountSecurity: () => void = () => {}
+  /** 打开帮助反馈回调。 */
+  onOpenHelpFeedback: () => void = () => {}
+  /** 打开关于听桥回调。 */
+  onOpenAboutHearBridge: () => void = () => {}
+
+  @Builder
+  private buildMenuRow(icon: Resource, title: string, subtitle: string, onClickAction: () => void): void {
+    Row({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Row()
+          .width(34)
+          .height(34)
+          .borderRadius(17)
+          .backgroundColor(PRIMARY_SOFT)
+
+        SymbolGlyph(icon)
+          .fontSize(18)
+          .fontColor([PRIMARY])
+      }
+      .width(34)
+      .height(34)
+
+      Column({ space: 4 }) {
+        Text(title)
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(TEXT_MAIN)
+
+        Text(subtitle)
+          .fontSize(12)
+          .fontColor(TEXT_SUB)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      SymbolGlyph($r('sys.symbol.chevron_forward'))
+        .fontSize(15)
+        .fontColor(['#95A7C0'])
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(18)
+    .onClick(() => {
+      onClickAction()
+    })
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      this.buildMenuRow($r('sys.symbol.star'), '我的收藏', '查看收藏的课程与训练项', this.onOpenFavorites)
+      this.buildMenuRow($r('sys.symbol.person'), '账号资料', '修改头像、昵称与个人资料', this.onOpenAccountProfile)
+      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', '管理登录状态与账号安全', this.onOpenAccountSecurity)
+      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', '反馈问题或查看使用帮助', this.onOpenHelpFeedback)
+      this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', '了解 HearBridge 项目', this.onOpenAboutHearBridge)
+    }
+    .width('100%')
+    .padding(8)
     .backgroundColor(CARD_BG)
     .borderRadius(28)
     .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
@@ -230,7 +306,7 @@ export struct MineProfileEditVisualCard {
 
   build() {
     Column({ space: 16 }) {
-      Text('资料')
+      Text('账号资料')
         .width('100%')
         .fontSize(18)
         .fontWeight(FontWeight.Medium)
@@ -249,7 +325,7 @@ export struct MineProfileEditVisualCard {
             .fontWeight(FontWeight.Medium)
             .fontColor('#1F2A44')
 
-          Text(this.avatarTip.trim().length > 0 ? this.avatarTip : '头像会上传到 MinIO，数据库只保存相对路径。')
+          Text(this.avatarTip.trim().length > 0 ? this.avatarTip : '可以从相册选择新头像。')
             .fontSize(12)
             .lineHeight(18)
             .fontColor(this.avatarTip.indexOf('失败') >= 0 ? DANGER : TEXT_SUB)
@@ -330,106 +406,6 @@ export struct MineProfileEditVisualCard {
           })
       }
       .width('100%')
-    }
-    .width('100%')
-    .padding(18)
-    .backgroundColor(CARD_BG)
-    .borderRadius(28)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
-/**
- * 我的页开发者模式卡。
- */
-@Component
-export struct MineDeveloperVisualCard {
-  /** 是否启用开发者采集模式。 */
-  @Prop enableDatasetCollect: boolean = false
-  /** 开发者提示文案。 */
-  @Prop developerTip: string = ''
-  /** 切换开发者模式回调。 */
-  onToggle: () => void = () => {}
-
-  build() {
-    Column({ space: 14 }) {
-      Row() {
-        Column({ space: 6 }) {
-          Text('开发者采集模式')
-            .fontSize(18)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2A44')
-
-          Text('开启后，手势练习页可采集 raw dataset 样本，用于管理端同步、特征转换和模型训练。')
-            .fontSize(13)
-            .lineHeight(20)
-            .fontColor(TEXT_SUB)
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Button(this.enableDatasetCollect ? '已开启' : '已关闭')
-          .width(90)
-          .height(38)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.enableDatasetCollect ? '#FFFFFF' : WARNING)
-          .backgroundColor(this.enableDatasetCollect ? WARNING : '#FFF7ED')
-          .borderRadius(14)
-          .onClick(() => {
-            this.onToggle()
-          })
-      }
-      .width('100%')
-
-      Text(this.enableDatasetCollect ? '当前会显示 raw 样本采集入口，请仅在管理员采集数据时使用。' : '普通用户模式下不会连接 Python raw dataset 采集服务。')
-        .fontSize(12)
-        .lineHeight(18)
-        .fontColor(this.enableDatasetCollect ? WARNING : TEXT_SUB)
-
-      if (this.developerTip.trim().length > 0) {
-        Text(this.developerTip)
-          .fontSize(12)
-          .lineHeight(18)
-          .fontColor(TEXT_SUB)
-      }
-    }
-    .width('100%')
-    .padding(18)
-    .backgroundColor(CARD_BG)
-    .borderRadius(28)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
-/**
- * 我的页服务地址卡。
- */
-@Component
-export struct MineEndpointVisualCard {
-  /** 后端基础地址。 */
-  @Prop baseUrl: string = ''
-  /** MinIO 访问地址。 */
-  @Prop minioUrl: string = ''
-
-  build() {
-    Column({ space: 10 }) {
-      Text('服务')
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Text(this.baseUrl)
-        .fontSize(13)
-        .lineHeight(20)
-        .fontColor(TEXT_SUB)
-
-      Text(this.minioUrl)
-        .fontSize(13)
-        .lineHeight(20)
-        .fontColor(TEXT_SUB)
     }
     .width('100%')
     .padding(18)
