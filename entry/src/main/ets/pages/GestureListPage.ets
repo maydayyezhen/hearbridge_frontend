@@ -218,12 +218,11 @@ struct GestureListPage {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 16, right: 16, top: 6, bottom: 64 })
+        .padding({ left: 16, right: 16, top: 6, bottom: 20 })
         .alignListItem(ListItemAlign.Start)
         .edgeEffect(EdgeEffect.None)
         .scrollBar(BarState.Off)
         .backgroundColor('#FFFFFF')
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
     }
     .width('100%')
@@ -231,6 +230,5 @@ struct GestureListPage {
     .backgroundColor('#FFFFFF')
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }
