@@ -99,7 +99,7 @@ struct GestureListPage {
       Blank()
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 12 })
+    .padding({ left: 16, right: 16, top: 16, bottom: 6 })
     .backgroundColor('#FFFFFF')
   }
 
@@ -205,7 +205,7 @@ struct GestureListPage {
         .alignItems(HorizontalAlign.Start)
         .justifyContent(FlexAlign.Start)
       } else {
-        List({ space: 16 }) {
+        List({ space: 14 }) {
           ForEach(
             this.gestureList,
             (item: GestureItemDto) => {
@@ -218,7 +218,7 @@ struct GestureListPage {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 16, right: 16, top: 16, bottom: 32 })
+        .padding({ left: 16, right: 16, top: 8, bottom: 20 })
         .alignListItem(ListItemAlign.Start)
         .edgeEffect(EdgeEffect.None)
         .scrollBar(BarState.Off)
