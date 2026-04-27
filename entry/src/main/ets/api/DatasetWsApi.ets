@@ -26,11 +26,24 @@ export class DatasetWsApi {
   private onErrorCallback: OnDatasetErrorCallback | null = null
   private onCloseCallback: OnDatasetCloseCallback | null = null
 
+  /**
+   * 判断是否允许使用开发者 raw dataset 采集能力。
+   */
+  private isDatasetCollectEnabled(): boolean {
+    const stored = AppStorage.get(AppConfig.DATASET_COLLECT_STORAGE_KEY) as boolean | undefined
+    return Boolean(stored ?? AppConfig.DEFAULT_ENABLE_DATASET_COLLECT)
+  }
+
   async connect(
     onStatus: OnDatasetStatusCallback,
     onError: OnDatasetErrorCallback,
     onClose: OnDatasetCloseCallback
   ): Promise<boolean> {
+    if (!this.isDatasetCollectEnabled()) {
+      onError('开发者采集模式未开启，普通用户不能采集 raw dataset 样本')
+      return false
+    }
+
     if (this.connected && this.socket !== null) {
       return true
     }
