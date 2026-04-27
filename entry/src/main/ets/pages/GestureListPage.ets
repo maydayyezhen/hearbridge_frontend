@@ -229,5 +229,6 @@ struct GestureListPage {
     .backgroundColor('#FFFFFF')
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }
