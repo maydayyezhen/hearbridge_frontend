@@ -1,6 +1,6 @@
 import { HttpClient } from '../common/http/HttpClient'
 import { AppConfig } from '../common/constants/AppConfig'
-import { CategoryDto, GestureItemDto } from '../model/ApiModels'
+import { CategoryDto, GestureItemDto, SignSearchResultDto } from '../model/ApiModels'
 
 export class GestureApi {
   static async getCategories(): Promise<CategoryDto[]> {
@@ -9,22 +9,7 @@ export class GestureApi {
     const result: CategoryDto[] = []
 
     rawList.forEach((item: Object) => {
-      const obj = item as Record<string, Object>
-      const coverObjectKey = GestureApi.readString(obj, 'coverObjectKey')
-      const coverUrl = AppConfig.normalizeAssetUrl(
-        GestureApi.readString(obj, 'coverUrl'),
-        coverObjectKey
-      )
-
-      result.push(
-        new CategoryDto(
-          GestureApi.readNumber(obj, 'id'),
-          GestureApi.readString(obj, 'code'),
-          GestureApi.readString(obj, 'nameZh'),
-          coverObjectKey,
-          coverUrl
-        )
-      )
+      result.push(GestureApi.parseCategory(item))
     })
 
     return result
@@ -36,33 +21,106 @@ export class GestureApi {
     const result: GestureItemDto[] = []
 
     rawList.forEach((item: Object) => {
-      const obj = item as Record<string, Object>
-      const sigmlObjectKey = GestureApi.readString(obj, 'sigmlObjectKey')
-      const coverObjectKey = GestureApi.readString(obj, 'coverObjectKey')
-      const sigmlUrl = AppConfig.normalizeAssetUrl(
-        GestureApi.readString(obj, 'sigmlUrl'),
-        sigmlObjectKey
-      )
-      const coverUrl = AppConfig.normalizeAssetUrl(
-        GestureApi.readString(obj, 'coverUrl'),
-        coverObjectKey
-      )
-
-      result.push(
-        new GestureItemDto(
-          GestureApi.readNumber(obj, 'id'),
-          GestureApi.readString(obj, 'code'),
-          GestureApi.readString(obj, 'nameZh'),
-          GestureApi.readString(obj, 'categoryCode'),
-          sigmlObjectKey,
-          coverObjectKey,
-          sigmlUrl,
-          coverUrl
-        )
-      )
+      result.push(GestureApi.parseGestureItem(item))
     })
 
     return result
+  }
+
+  /**
+   * 搜索手语分类和手势资源。
+   *
+   * @param keyword 搜索关键词
+   * @returns 分类与手势资源搜索结果
+   */
+  static async search(keyword: string): Promise<SignSearchResultDto> {
+    const trimmedKeyword = keyword.trim()
+    if (trimmedKeyword.length === 0) {
+      return new SignSearchResultDto('', [], [])
+    }
+
+    const text = await HttpClient.get(`/sign/search?keyword=${encodeURIComponent(trimmedKeyword)}`)
+    const raw = JSON.parse(text) as Record<string, Object>
+    const rawCategories = GestureApi.readArray(raw, 'categories')
+    const rawResources = GestureApi.readArray(raw, 'resources')
+    const categories: CategoryDto[] = []
+    const resources: GestureItemDto[] = []
+
+    rawCategories.forEach((item: Object) => {
+      categories.push(GestureApi.parseCategory(item))
+    })
+
+    rawResources.forEach((item: Object) => {
+      resources.push(GestureApi.parseGestureItem(item))
+    })
+
+    return new SignSearchResultDto(
+      GestureApi.readString(raw, 'keyword'),
+      categories,
+      resources
+    )
+  }
+
+  /**
+   * 解析分类 DTO。
+   *
+   * @param item 原始对象
+   * @returns 分类 DTO
+   */
+  private static parseCategory(item: Object): CategoryDto {
+    const obj = item as Record<string, Object>
+    const coverObjectKey = GestureApi.readString(obj, 'coverObjectKey')
+    const coverUrl = AppConfig.normalizeAssetUrl(
+      GestureApi.readString(obj, 'coverUrl'),
+      coverObjectKey
+    )
+
+    return new CategoryDto(
+      GestureApi.readNumber(obj, 'id'),
+      GestureApi.readString(obj, 'code'),
+      GestureApi.readString(obj, 'nameZh'),
+      coverObjectKey,
+      coverUrl
+    )
+  }
+
+  /**
+   * 解析手势资源 DTO。
+   *
+   * @param item 原始对象
+   * @returns 手势资源 DTO
+   */
+  private static parseGestureItem(item: Object): GestureItemDto {
+    const obj = item as Record<string, Object>
+    const sigmlObjectKey = GestureApi.readString(obj, 'sigmlObjectKey')
+    const coverObjectKey = GestureApi.readString(obj, 'coverObjectKey')
+    const sigmlUrl = AppConfig.normalizeAssetUrl(
+      GestureApi.readString(obj, 'sigmlUrl'),
+      sigmlObjectKey
+    )
+    const coverUrl = AppConfig.normalizeAssetUrl(
+      GestureApi.readString(obj, 'coverUrl'),
+      coverObjectKey
+    )
+
+    return new GestureItemDto(
+      GestureApi.readNumber(obj, 'id'),
+      GestureApi.readString(obj, 'code'),
+      GestureApi.readString(obj, 'nameZh'),
+      GestureApi.readString(obj, 'categoryCode'),
+      sigmlObjectKey,
+      coverObjectKey,
+      sigmlUrl,
+      coverUrl
+    )
+  }
+
+  private static readArray(source: Record<string, Object>, key: string): Object[] {
+    const value = source[key]
+    if (Array.isArray(value)) {
+      return value as Object[]
+    }
+    return []
   }
 
   private static readString(source: Record<string, Object>, key: string): string {
