@@ -15,27 +15,27 @@ export struct MineAvatarView {
   @Prop avatarUrl: string = ''
   /** 头像文字兜底。 */
   @Prop avatarText: string = 'H'
-  /** 头像尺寸。 */
-  @Prop size: number = 72
+  /** 头像尺寸，不能命名为 size，避免与 ArkUI 组件基类方法冲突。 */
+  @Prop avatarSize: number = 72
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
       if (this.avatarUrl.trim().length > 0) {
         Image(this.avatarUrl)
-          .width(this.size)
-          .height(this.size)
-          .borderRadius(this.size / 2)
+          .width(this.avatarSize)
+          .height(this.avatarSize)
+          .borderRadius(this.avatarSize / 2)
           .objectFit(ImageFit.Cover)
       } else {
         Text(this.avatarText)
-          .fontSize(this.size >= 70 ? 30 : 24)
+          .fontSize(this.avatarSize >= 70 ? 30 : 24)
           .fontWeight(FontWeight.Bold)
           .fontColor(PRIMARY)
       }
     }
-    .width(this.size)
-    .height(this.size)
-    .borderRadius(this.size / 2)
+    .width(this.avatarSize)
+    .height(this.avatarSize)
+    .borderRadius(this.avatarSize / 2)
     .backgroundColor(PRIMARY_SOFT)
   }
 }
@@ -121,7 +121,7 @@ export struct MineProfileHeaderCard {
             MineAvatarView({
               avatarUrl: this.avatarUrl,
               avatarText: this.avatarText,
-              size: 72
+              avatarSize: 72
             })
           }
           .width(82)
@@ -240,7 +240,7 @@ export struct MineProfileEditVisualCard {
         MineAvatarView({
           avatarUrl: this.avatarUrl,
           avatarText: this.avatarText,
-          size: 72
+          avatarSize: 72
         })
 
         Column({ space: 8 }) {
