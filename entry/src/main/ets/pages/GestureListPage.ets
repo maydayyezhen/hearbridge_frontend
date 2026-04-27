@@ -99,7 +99,7 @@ struct GestureListPage {
       Blank()
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 6 })
+    .padding({ left: 16, right: 16, top: 16, bottom: 12 })
     .backgroundColor('#FFFFFF')
   }
 
@@ -205,24 +205,23 @@ struct GestureListPage {
         .alignItems(HorizontalAlign.Start)
         .justifyContent(FlexAlign.Start)
       } else {
-        List({ space: 14 }) {
-          ForEach(
-            this.gestureList,
-            (item: GestureItemDto) => {
-              ListItem() {
+        Scroll() {
+          Column({ space: 14 }) {
+            ForEach(
+              this.gestureList,
+              (item: GestureItemDto) => {
                 this.buildGestureItem(item)
-              }
-            },
-            (item: GestureItemDto) => item.id.toString()
-          )
+              },
+              (item: GestureItemDto) => item.id.toString()
+            )
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: 24 })
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 16, right: 16, top: 6, bottom: 20 })
-        .alignListItem(ListItemAlign.Start)
-        .edgeEffect(EdgeEffect.None)
-        .scrollBar(BarState.Off)
         .backgroundColor('#FFFFFF')
+        .scrollBar(BarState.Off)
       }
     }
     .width('100%')
