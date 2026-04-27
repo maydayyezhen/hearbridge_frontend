@@ -85,6 +85,27 @@ export struct GestureCameraOverlay {
   /** 丢弃 raw dataset 样本回调。 */
   onDiscardDataset: () => void = () => {}
 
+  /**
+   * 获取顶部有意义内容保护距离。
+   *
+   * 说明：
+   * 相机预览画面可以铺进系统安全区，但顶部标题、关闭按钮、识别面板不能压进状态栏。
+   * 真机上 avoidArea 可能偏小或临时为 0，因此这里加最小保护值。
+   */
+  private getProtectedTopPadding(): number {
+    return Math.max(this.overlayTopPadding, 56)
+  }
+
+  /**
+   * 获取底部有意义内容保护距离。
+   *
+   * 说明：
+   * 底部操作按钮不能压进手势条 / 导航指示区，因此这里加最小保护值。
+   */
+  private getProtectedBottomPadding(): number {
+    return Math.max(this.overlayBottomPadding, 64)
+  }
+
   @Builder
   private buildCameraPreview(): void {
     Stack({ alignContent: Alignment.Center }) {
@@ -201,7 +222,7 @@ export struct GestureCameraOverlay {
         .padding({
           left: 16,
           right: 16,
-          top: this.overlayTopPadding,
+          top: this.getProtectedTopPadding(),
           bottom: 0
         })
 
@@ -237,7 +258,7 @@ export struct GestureCameraOverlay {
           left: 16,
           right: 16,
           top: 0,
-          bottom: this.overlayBottomPadding
+          bottom: this.getProtectedBottomPadding()
         })
       }
       .width('100%')
