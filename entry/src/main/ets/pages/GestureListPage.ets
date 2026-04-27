@@ -191,7 +191,7 @@ struct GestureListPage {
     }
     .width('100%')
     .height('100%')
-    .padding(16)
+    .padding({ left: 0, right: 0, top: 0, bottom: 0 })
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
   }
@@ -210,7 +210,7 @@ struct GestureListPage {
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })
-      .padding({ left: 16, right: 16, top: 6, bottom: 20 })
+      .padding({ left: 0, right: 0, top: 6, bottom: 20 })
       .alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start)
     }
