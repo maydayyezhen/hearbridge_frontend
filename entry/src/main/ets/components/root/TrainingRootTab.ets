@@ -420,21 +420,32 @@ export struct TrainingRootTab {
   }
 
   build() {
-    Scroll() {
-      Column({ space: 16 }) {
+    Column({ space: 0 }) {
+      Row() {
         this.buildSearchBar()
-        this.buildSearchResults()
       }
       .width('100%')
-      .constraintSize({ minHeight: '100%' })
-      .padding({ left: 16, right: 16, top: 16, bottom: 24 })
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Start)
+      .padding({ left: 16, right: 16, top: 16, bottom: 12 })
+      .backgroundColor(PAGE_BG)
+
+      Scroll() {
+        Column({ space: 0 }) {
+          this.buildSearchResults()
+        }
+        .width('100%')
+        .constraintSize({ minHeight: '100%' })
+        .padding({ left: 16, right: 16, top: 0, bottom: 24 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor(PAGE_BG)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
-    .scrollBar(BarState.Off)
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 }
