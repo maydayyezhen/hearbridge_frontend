@@ -209,7 +209,10 @@ export struct MineMenuVisualCard {
   build() {
     Column({ space: 10 }) {
       this.buildMenuRow($r('sys.symbol.star'), '我的收藏', this.onOpenFavorites)
-      this.buildMenuRow($r('sys.symbol.person'), '账号资料', this.onOpenAccountProfile)
+      this.buildMenuRow($r('sys.symbol.person'), '账号资料', () => {
+        AppStorage.setOrCreate('mine.currentView', 'profile')
+        this.onOpenAccountProfile()
+      })
       this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', this.onOpenAccountSecurity)
       this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', this.onOpenHelpFeedback)
       this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', this.onOpenAboutHearBridge)
