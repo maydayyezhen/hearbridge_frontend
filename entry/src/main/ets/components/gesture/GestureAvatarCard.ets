@@ -22,9 +22,9 @@ export struct GestureAvatarCard {
    *
    * 说明：
    * 当前手语训练页希望尽量保持单屏不可滚动，
-   * 所以默认高度采用紧凑值；如后续有独立大屏预览页，可由父组件显式传入更大高度。
+   * 所以默认高度采用适中的紧凑值；如后续有独立大屏预览页，可由父组件显式传入更大高度。
    */
-  @Prop avatarViewportHeight: number = 240
+  @Prop avatarViewportHeight: number = 280
 
   /** 是否使用紧凑展示模式。 */
   @Prop compact: boolean = true
