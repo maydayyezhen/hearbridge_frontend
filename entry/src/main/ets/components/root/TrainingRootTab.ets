@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI'
-import { CategoryDto } from '../../model/ApiModels'
-import { GestureListPageParams } from '../../model/GestureModels'
+import { GestureApi } from '../../api/GestureApi'
+import { CategoryDto, GestureItemDto } from '../../model/ApiModels'
+import { GestureListPageParams, GesturePracticePageParams } from '../../model/GestureModels'
 
 const PAGE_BG: string = '#FFFFFF'
 const CARD_BG: string = '#FFFFFF'
@@ -16,7 +17,7 @@ const BORDER: string = '#E5EAF3'
  * 当前定位：
  * 1. 作为训练资源搜索入口，而不是传统说明型首页。
  * 2. 搜索框只负责输入；用户点击键盘搜索按钮后才提交搜索。
- * 3. 搜索范围暂时基于当前已加载分类；后续可接入后端资源搜索接口。
+ * 3. 已提交搜索时调用后端统一搜索接口，同时展示分类和具体手势资源。
  */
 @Component
 export struct TrainingRootTab {
@@ -31,6 +32,14 @@ export struct TrainingRootTab {
   @State keywordInput: string = ''
   /** 已提交的搜索关键词。 */
   @State submittedKeyword: string = ''
+  /** 搜索中的分类结果。 */
+  @State searchedCategories: CategoryDto[] = []
+  /** 搜索中的手势资源结果。 */
+  @State searchedResources: GestureItemDto[] = []
+  /** 是否正在搜索。 */
+  @State searching: boolean = false
+  /** 搜索错误文案。 */
+  @State searchErrorText: string = ''
 
   /** 获取已提交搜索关键词。 */
   private getKeyword(): string {
@@ -44,21 +53,42 @@ export struct TrainingRootTab {
 
   /** 提交搜索。 */
   private submitSearch(): void {
-    this.submittedKeyword = this.keywordInput.trim()
+    const keyword = this.keywordInput.trim()
+    this.submittedKeyword = keyword
+    if (keyword.length === 0) {
+      this.searchedCategories = []
+      this.searchedResources = []
+      this.searchErrorText = ''
+      return
+    }
+    void this.loadSearchResult(keyword)
   }
 
-  /** 获取可见分类列表。 */
-  private getVisibleCategories(): CategoryDto[] {
-    const keyword = this.getKeyword()
-    if (keyword.length === 0) {
-      return this.categories
+  /** 加载真实搜索结果。 */
+  private async loadSearchResult(keyword: string): Promise<void> {
+    if (this.searching) {
+      return
     }
 
-    return this.categories.filter((item: CategoryDto) => {
-      const name = item.nameZh.toLowerCase()
-      const code = item.code.toLowerCase()
-      return name.indexOf(keyword) >= 0 || code.indexOf(keyword) >= 0
-    })
+    this.searching = true
+    this.searchErrorText = ''
+
+    try {
+      const result = await GestureApi.search(keyword)
+      this.searchedCategories = result.categories
+      this.searchedResources = result.resources
+    } catch (err) {
+      this.searchedCategories = []
+      this.searchedResources = []
+      this.searchErrorText = `搜索失败：${JSON.stringify(err)}`
+    } finally {
+      this.searching = false
+    }
+  }
+
+  /** 获取未搜索时展示的分类列表。 */
+  private getDefaultCategories(): CategoryDto[] {
+    return this.categories
   }
 
   /** 打开分类资源列表页。 */
@@ -76,10 +106,43 @@ export struct TrainingRootTab {
     }
   }
 
+  /** 打开手势训练页。 */
+  private openGestureResource(item: GestureItemDto): void {
+    try {
+      AppStorage.setOrCreate('recent.practice.id', item.id)
+      AppStorage.setOrCreate('recent.practice.code', item.code)
+      AppStorage.setOrCreate('recent.practice.name', item.nameZh === '' ? item.code : item.nameZh)
+      AppStorage.setOrCreate('recent.practice.sigmlUrl', item.sigmlUrl)
+      AppStorage.setOrCreate('recent.practice.coverUrl', item.coverUrl)
+
+      const params: GesturePracticePageParams = new GesturePracticePageParams(
+        item.id,
+        item.code,
+        item.nameZh === '' ? item.code : item.nameZh,
+        item.sigmlUrl,
+        item.coverUrl
+      )
+      router.pushUrl({
+        url: 'pages/GesturePracticePageRefactored',
+        params: params
+      }).catch((err: Object) => {
+        console.error(`[TrainingRootTab] open resource failed: ${JSON.stringify(err)}`)
+      })
+    } catch (err) {
+      console.error(`[TrainingRootTab] open resource exception: ${JSON.stringify(err)}`)
+    }
+  }
+
   /** 构建分类徽标文字。 */
   private buildBadgeText(item: CategoryDto): string {
     const source = item.nameZh.trim().length > 0 ? item.nameZh : item.code
     return source.length > 0 ? source.slice(0, 1).toUpperCase() : 'S'
+  }
+
+  /** 构建资源徽标文字。 */
+  private buildResourceBadgeText(item: GestureItemDto): string {
+    const source = item.nameZh.trim().length > 0 ? item.nameZh : item.code
+    return source.length > 0 ? source.slice(0, 1).toUpperCase() : '练'
   }
 
   /** 构建搜索栏。 */
@@ -100,7 +163,7 @@ export struct TrainingRootTab {
       .width(30)
       .height(30)
 
-      TextInput({ text: this.keywordInput, placeholder: '搜索训练分类或编码' })
+      TextInput({ text: this.keywordInput, placeholder: '搜索手势或分类' })
         .layoutWeight(1)
         .height(38)
         .fontSize(15)
@@ -120,6 +183,24 @@ export struct TrainingRootTab {
     .backgroundColor(CARD_BG)
     .borderRadius(20)
     .border({ width: 1, color: BORDER })
+  }
+
+  /** 构建分组标题。 */
+  @Builder
+  private buildSectionTitle(title: string, count: number): void {
+    Row() {
+      Text(title)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(TEXT_MAIN)
+
+      Text(` ${count}`)
+        .fontSize(13)
+        .fontColor(TEXT_SUB)
+
+      Blank()
+    }
+    .width('100%')
   }
 
   /** 构建分类结果卡片。 */
@@ -153,7 +234,7 @@ export struct TrainingRootTab {
       .alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Center)
 
-      Text('进入')
+      Text('分类')
         .fontSize(14)
         .fontColor(PRIMARY)
     }
@@ -164,6 +245,60 @@ export struct TrainingRootTab {
     .border({ width: 1, color: BORDER })
     .onClick(() => {
       this.openCategory(item)
+    })
+  }
+
+  /** 构建手势资源结果卡片。 */
+  @Builder
+  private buildResourceResultCard(item: GestureItemDto): void {
+    Row({ space: 14 }) {
+      if (item.coverUrl !== '') {
+        Image(item.coverUrl)
+          .width(52)
+          .height(52)
+          .borderRadius(18)
+          .objectFit(ImageFit.Cover)
+          .backgroundColor(PRIMARY_SOFT)
+      } else {
+        Stack({ alignContent: Alignment.Center }) {
+          Text(this.buildResourceBadgeText(item))
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(PRIMARY)
+        }
+        .width(52)
+        .height(52)
+        .borderRadius(18)
+        .backgroundColor(PRIMARY_SOFT)
+      }
+
+      Column({ space: 5 }) {
+        Text(item.nameZh.trim().length > 0 ? item.nameZh : item.code)
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(TEXT_MAIN)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        Text(`${item.code} · ${item.categoryCode}`)
+          .fontSize(13)
+          .fontColor(TEXT_SUB)
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Center)
+
+      Text('练习')
+        .fontSize(14)
+        .fontColor(PRIMARY)
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor(CARD_BG)
+    .borderRadius(20)
+    .border({ width: 1, color: BORDER })
+    .onClick(() => {
+      this.openGestureResource(item)
     })
   }
 
@@ -190,19 +325,21 @@ export struct TrainingRootTab {
     .alignItems(HorizontalAlign.Center)
   }
 
-  /** 构建搜索结果区域。 */
+  /** 构建未搜索时的默认内容。 */
   @Builder
-  private buildSearchResults(): void {
+  private buildDefaultResults(): void {
     if (this.loading) {
       this.buildStateCard('正在加载训练分类', '稍等一下，我们正在同步当前训练资源。')
     } else if (this.errorText.trim().length > 0) {
       this.buildStateCard('训练分类加载失败', this.errorText)
-    } else if (this.getVisibleCategories().length === 0) {
-      this.buildStateCard('没有匹配结果', this.isSearching() ? '换个关键词后点击键盘搜索按钮再试试。' : '当前还没有可用训练分类。')
+    } else if (this.getDefaultCategories().length === 0) {
+      this.buildStateCard('暂无训练分类', '当前还没有可用训练分类。')
     } else {
       Column({ space: 14 }) {
+        this.buildSectionTitle('全部分类', this.getDefaultCategories().length)
+
         ForEach(
-          this.getVisibleCategories(),
+          this.getDefaultCategories(),
           (item: CategoryDto) => {
             this.buildCategoryResultCard(item)
           },
@@ -210,6 +347,59 @@ export struct TrainingRootTab {
         )
       }
       .width('100%')
+    }
+  }
+
+  /** 构建真实搜索结果。 */
+  @Builder
+  private buildSubmittedSearchResults(): void {
+    if (this.searching) {
+      this.buildStateCard('正在搜索', '正在查找匹配的手势和分类。')
+    } else if (this.searchErrorText.trim().length > 0) {
+      this.buildStateCard('搜索失败', this.searchErrorText)
+    } else if (this.searchedResources.length === 0 && this.searchedCategories.length === 0) {
+      this.buildStateCard('没有匹配结果', '换个关键词后点击键盘搜索按钮再试试。')
+    } else {
+      Column({ space: 16 }) {
+        if (this.searchedResources.length > 0) {
+          Column({ space: 14 }) {
+            this.buildSectionTitle('手势资源', this.searchedResources.length)
+            ForEach(
+              this.searchedResources,
+              (item: GestureItemDto) => {
+                this.buildResourceResultCard(item)
+              },
+              (item: GestureItemDto) => item.id.toString()
+            )
+          }
+          .width('100%')
+        }
+
+        if (this.searchedCategories.length > 0) {
+          Column({ space: 14 }) {
+            this.buildSectionTitle('相关分类', this.searchedCategories.length)
+            ForEach(
+              this.searchedCategories,
+              (item: CategoryDto) => {
+                this.buildCategoryResultCard(item)
+              },
+              (item: CategoryDto) => item.id.toString()
+            )
+          }
+          .width('100%')
+        }
+      }
+      .width('100%')
+    }
+  }
+
+  /** 构建搜索结果区域。 */
+  @Builder
+  private buildSearchResults(): void {
+    if (this.isSearching()) {
+      this.buildSubmittedSearchResults()
+    } else {
+      this.buildDefaultResults()
     }
   }
 
