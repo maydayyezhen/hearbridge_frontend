@@ -2,7 +2,7 @@ import { router } from '@kit.ArkUI'
 import { CategoryDto } from '../../model/ApiModels'
 import { GestureListPageParams, GesturePracticePageParams } from '../../model/GestureModels'
 
-const PAGE_BG: string = '#F5F7FB'
+const PAGE_BG: string = '#FFFFFF'
 const CARD_BG: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
 const PRIMARY_SOFT: string = '#EAF1FF'
@@ -258,6 +258,7 @@ export struct HomeRootTab {
     .padding(20)
     .backgroundColor(CARD_BG)
     .borderRadius(24)
+    .border({ width: 1, color: BORDER })
   }
 
   @Builder
@@ -297,6 +298,7 @@ export struct HomeRootTab {
     .padding(16)
     .backgroundColor(CARD_BG)
     .borderRadius(20)
+    .border({ width: 1, color: BORDER })
     .onClick(() => {
       this.openCategory(item)
     })
@@ -351,6 +353,7 @@ export struct HomeRootTab {
     .padding({ left: 18, right: 18, top: 28, bottom: 28 })
     .backgroundColor(CARD_BG)
     .borderRadius(24)
+    .border({ width: 1, color: BORDER })
     .alignItems(HorizontalAlign.Center)
   }
 
