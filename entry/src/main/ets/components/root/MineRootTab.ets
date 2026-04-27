@@ -769,6 +769,7 @@ export struct MineRootTab {
             .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
           }
         }
+
         .width('100%')
         .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
       }

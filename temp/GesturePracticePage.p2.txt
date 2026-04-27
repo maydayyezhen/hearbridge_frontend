@@ -1,0 +1,316 @@
+﻿      } else {
+        this.topSafeInsetVp = 0
+        this.bottomSafeInsetVp = 0
+      }
+    } catch (error) {
+      console.error(`鏇存柊娌夋蹈寮忓竷灞€澶辫触锛?{JSON.stringify(error)}`)
+      this.topSafeInsetVp = 0
+      this.bottomSafeInsetVp = 0
+    }
+  }
+
+  private getOverlayTopPadding(): number {
+    return (this.topSafeInsetVp > 0 ? this.topSafeInsetVp : 32) + 8
+  }
+
+  private getOverlayBottomPadding(): number {
+    return (this.bottomSafeInsetVp > 0 ? this.bottomSafeInsetVp : 24) + 16
+  }
+
+  private resetRecognitionView(): void {
+    this.recognitionStatusText = '璇烽湶鍑哄弻鑲╋紝骞惰鎵嬪娍鍔ㄤ綔淇濇寔鍦ㄧ敾闈㈠唴'
+    this.hasRecognitionSucceeded = false
+    this.recognitionModelVersionName = '灏氭湭寤虹珛璇嗗埆浼氳瘽'
+    this.recognitionUsingPublishedModel = false
+  }
+
+  private getPrimaryButtonText(): string {
+    if (this.hasRecognitionSucceeded) {
+      return '閲嶆柊寮€濮?
+    }
+    return this.isRecognizing ? '鍋滄璇嗗埆' : '寮€濮嬭瘑鍒?
+  }
+
+  private getStatusCardBackgroundColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return 'rgba(34,197,94,0.34)'
+    }
+    return 'rgba(0,0,0,0.28)'
+  }
+
+  private getStatusCardBorderColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return 'rgba(134,239,172,0.82)'
+    }
+    return 'rgba(255,255,255,0.14)'
+  }
+
+  private pickCameraDevice(cameraList: Array<camera.CameraDevice>): camera.CameraDevice | undefined {
+    if (!cameraList || cameraList.length === 0) {
+      return undefined
+    }
+
+    for (let i = 0; i < cameraList.length; i += 1) {
+      if (cameraList[i].cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT) {
+        return cameraList[i]
+      }
+    }
+
+    return cameraList[0]
+  }
+
+  private getPortraitRatioOfProfile(profile: camera.Profile): number {
+    const width = profile.size.width
+    const height = profile.size.height
+    const shortSide = Math.min(width, height)
+    const longSide = Math.max(width, height)
+    return shortSide / longSide
+  }
+
+  private async pickBestPreviewProfile(profiles: Array<camera.Profile>): Promise<camera.Profile> {
+    const context = getContext(this) as common.UIAbilityContext
+    const win = await window.getLastWindow(context)
+    const rect = win.getWindowProperties().windowRect
+    const targetRatio = rect.width / rect.height
+
+    let bestProfile = profiles[0]
+    let bestDiff = Number.MAX_VALUE
+
+    for (let i = 0; i < profiles.length; i += 1) {
+      const currentRatio = this.getPortraitRatioOfProfile(profiles[i])
+      const diff = Math.abs(currentRatio - targetRatio)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestProfile = profiles[i]
+      }
+    }
+
+    return bestProfile
+  }
+
+  private async handleSurfaceLoaded(): Promise<void> {
+    try {
+      this.surfaceId = this.xComponentController.getXComponentSurfaceId()
+      await this.startRealCamera()
+    } catch (error) {
+      const err = error as BusinessError
+      this.cameraStatusText = `鑾峰彇棰勮鐢婚潰澶辫触锛?{err.code}`
+      console.error(`鑾峰彇 surfaceId 澶辫触锛歝ode=${err.code}, message=${err.message}`)
+    }
+  }
+
+  private async startRealCamera(): Promise<void> {
+    if (this.isCameraStarting) {
+      return
+    }
+    if (!this.surfaceId) {
+      this.cameraStatusText = '棰勮鐢婚潰灏氭湭灏辩华'
+      return
+    }
+
+    this.isCameraStarting = true
+    this.previewStarted = false
+    this.cameraStatusText = '姝ｅ湪鐢宠鐩告満鏉冮檺'
+
+    try {
+      const granted = await this.requestCameraPermission()
+      if (!granted) {
+        this.cameraStatusText = '鏈幏寰楃浉鏈烘潈闄?
+        return
+      }
+
+      await this.safeStopCamera()
+
+      const context = getContext(this) as common.UIAbilityContext
+      this.cameraManager = camera.getCameraManager(context)
+
+      const cameraList: Array<camera.CameraDevice> = this.cameraManager.getSupportedCameras()
+      if (!cameraList || cameraList.length === 0) {
+        this.cameraStatusText = '鏈壘鍒板彲鐢ㄦ憚鍍忓ご'
+        return
+      }
+
+      this.currentCamera = this.pickCameraDevice(cameraList)
+      if (!this.currentCamera) {
+        this.cameraStatusText = '鎽勫儚澶撮€夋嫨澶辫触'
+        return
+      }
+
+      const outputCapability: camera.CameraOutputCapability =
+        this.cameraManager.getSupportedOutputCapability(this.currentCamera, camera.SceneMode.NORMAL_PHOTO)
+
+      if (!outputCapability.previewProfiles || outputCapability.previewProfiles.length === 0) {
+        this.cameraStatusText = '褰撳墠璁惧娌℃湁鍙敤棰勮閰嶇疆'
+        return
+      }
+
+      const displayProfile = await this.pickBestPreviewProfile(outputCapability.previewProfiles)
+
+      this.xComponentController.setXComponentSurfaceSize({
+        surfaceWidth: displayProfile.size.width,
+        surfaceHeight: displayProfile.size.height
+      })
+
+      this.currentCameraInput = this.cameraManager.createCameraInput(this.currentCamera)
+      await this.currentCameraInput.open()
+
+      this.currentPreviewOutput = this.cameraManager.createPreviewOutput(displayProfile, this.surfaceId)
+
+      this.currentPreviewOutput.on('frameStart', () => {
+        this.previewStarted = true
+        this.cameraStatusText = '棰勮宸插惎鍔?
+        this.startCaptureLoop()
+      })
+
+      this.currentPreviewOutput.on('error', (previewError: BusinessError) => {
+        this.cameraStatusText = `棰勮鍑洪敊锛?{previewError.code}`
+        console.error(`棰勮杈撳嚭閿欒锛歝ode=${previewError.code}, message=${previewError.message}`)
+      })
+
+      this.currentSession = this.cameraManager.createSession(camera.SceneMode.NORMAL_PHOTO) as camera.PhotoSession
+      this.currentSession.beginConfig()
+      this.currentSession.addInput(this.currentCameraInput)
+      this.currentSession.addOutput(this.currentPreviewOutput)
+      await this.currentSession.commitConfig()
+
+      const displayRotation = display.getDefaultDisplaySync().rotation * camera.ImageRotation.ROTATION_90
+      const previewRotation = this.currentPreviewOutput.getPreviewRotation(displayRotation)
+      this.currentPreviewOutput.setPreviewRotation(previewRotation, false)
+
+      this.cameraStatusText = '姝ｅ湪鍚姩棰勮'
+      await this.currentSession.start()
+    } catch (error) {
+      const err = error as BusinessError
+      this.cameraStatusText = `鐩告満鍚姩澶辫触锛?{err.code}`
+      console.error(`鍚姩鐪熷疄鐩告満澶辫触锛歝ode=${err.code}, message=${err.message}`)
+    } finally {
+      this.isCameraStarting = false
+    }
+  }
+
+  /**
+   * 瑙勮寖鍖栧噯澶囧彂閫佺粰鍚庣鐨?PixelMap銆?
+   *
+   * 娉ㄦ剰锛?
+   * - 鍚庣涓嶅啀 rotate / flip
+   * - 杩欓噷杈撳嚭鐨?PixelMap 蹇呴』鏄?MediaPipe-ready 鍥惧儚
+   * - 璇嗗埆鍜岄噰闆嗗叡鐢ㄨ繖涓€濂楄緭鍑?
+   */
+  private async normalizeFramePixelMapBeforeSend(sourceMap: image.PixelMap): Promise<void> {
+    if (this.shouldRotateFrameBeforeSend && this.frameRotateDegreesBeforeSend !== 0) {
+      await sourceMap.rotate(this.frameRotateDegreesBeforeSend)
+    }
+
+    if (this.shouldMirrorFrameBeforeSend) {
+      // 姘村钩闀滃儚锛歨orizontal = true, vertical = false
+      await sourceMap.flip(true, false)
+    }
+  }
+
+  private async captureCurrentFrameAsJpeg(): Promise<ArrayBuffer | null> {
+    if (!this.surfaceId) {
+      return null
+    }
+
+    let sourceMap: image.PixelMap | null = null
+    let packer: image.ImagePacker | null = null
+
+    try {
+      sourceMap = await image.createPixelMapFromSurface(this.surfaceId)
+
+      // 鍓嶇璐熻矗鎶婂浘鍍忓鐞嗘垚鍚庣鍙洿鎺ラ€佸叆 MediaPipe 鐨勭姸鎬併€?
+      await this.normalizeFramePixelMapBeforeSend(sourceMap)
+
+      const info = sourceMap.getImageInfoSync()
+
+      this.gestureFrameWidth = info.size.width
+      this.gestureFrameHeight = info.size.height
+
+      packer = image.createImagePacker()
+      const jpegBytes = await packer.packToData(sourceMap, {
+        format: 'image/jpeg',
+        quality: this.jpegQuality,
+        bufferSize: info.size.width * info.size.height * 4
+      })
+
+      if (jpegBytes.byteLength <= 0) {
+        return null
+      }
+
+      return jpegBytes
+    } catch (error) {
+      console.error(`[GesturePracticePage] capture jpeg failed: ${JSON.stringify(error)}`)
+      return null
+    } finally {
+      try {
+        if (packer !== null) {
+          await packer.release()
+        }
+      } catch (_error) {
+      }
+
+      try {
+        if (sourceMap !== null) {
+          sourceMap.release()
+        }
+      } catch (_error) {
+      }
+    }
+  }
+
+  private startCaptureLoop(): void {
+    this.stopCaptureLoop()
+
+    this.captureTimerId = setInterval(() => {
+      void this.captureAndSendLatestFrame()
+    }, this.frameSendIntervalMs)
+  }
+
+  private stopCaptureLoop(): void {
+    if (this.captureTimerId >= 0) {
+      clearInterval(this.captureTimerId)
+      this.captureTimerId = -1
+    }
+
+    this.captureInProgress = false
+    this.datasetCountdownText = ''
+  }
+
+  private async captureAndSendLatestFrame(): Promise<void> {
+    if (!this.surfaceId || !this.previewStarted) {
+      return
+    }
+
+    if (this.captureInProgress) {
+      return
+    }
+
+    this.captureInProgress = true
+
+    try {
+      const jpegBytes = await this.captureCurrentFrameAsJpeg()
+      if (!jpegBytes || jpegBytes.byteLength <= 0) {
+        return
+      }
+
+      // 璇嗗埆閾捐矾锛氬彂閫佺粰 /ws/gesture
+      if (this.recognitionSession.canAcceptFrame()) {
+        this.recognitionSession.enqueueFrame(jpegBytes)
+      }
+
+      // 閲囬泦閾捐矾锛氬彂閫佺粰 /ws/dataset
+      // 娉ㄦ剰锛氳繖閲屼笉 await锛岄伩鍏嶉噰闆嗗彂閫侀樆濉炴姄甯у惊鐜€?
+      if (this.enableDatasetCollect && this.datasetCollectSession.canAcceptFrame()) {
+        this.datasetCollectSession.enqueueFrame(jpegBytes)
+      }
+    } catch (error) {
+      console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
+    } finally {
+      this.captureInProgress = false
+    }
+  }
+
+  /**
+   * 寮€濮?raw dataset 閲囬泦銆?
+   */
+  private async startDatasetCollect(): Promise<void> {

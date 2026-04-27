@@ -1,0 +1,316 @@
+﻿    const started = await this.datasetCollectSession.start({
+      enableDatasetCollect: this.enableDatasetCollect,
+      isRecognizing: this.isRecognizing,
+      previewStarted: this.previewStarted,
+      hasSurface: this.surfaceId !== '',
+      resourceCode: this.resourceCode
+    })
+
+    if (started) {
+      this.startCaptureLoop()
+    }
+  }
+
+  /**
+   * 鍋滄 raw dataset 閲囬泦銆?
+   *
+   * @param preserveStatus 鏄惁淇濈暀鐘舵€佹枃妗?
+   */
+  private async stopDatasetCollect(preserveStatus: boolean = false): Promise<void> {
+    await this.datasetCollectSession.stop(preserveStatus)
+  }
+
+  /**
+   * 纭淇濆瓨褰撳墠寰呯‘璁ゆ牱鏈€?
+   */
+  private async confirmSaveDataset(): Promise<void> {
+    await this.datasetCollectSession.confirmSave()
+  }
+
+  /**
+   * 涓㈠純褰撳墠寰呯‘璁ゆ牱鏈€?
+   */
+  private async discardPendingDataset(): Promise<void> {
+    await this.datasetCollectSession.discardPending()
+  }
+
+  /**
+   * 寮€濮嬫墜鍔垮疄鏃惰瘑鍒€?
+   */
+  private async startGestureRecognition(): Promise<void> {
+    const firstFrame = this.previewStarted && this.surfaceId !== ''
+      ? await this.captureCurrentFrameAsJpeg()
+      : null
+
+    const started = await this.recognitionSession.start({
+      isDatasetBusy: this.isDatasetCollecting || this.isDatasetWaitingConfirm,
+      previewStarted: this.previewStarted,
+      hasSurface: this.surfaceId !== '',
+      resourceCode: this.resourceCode,
+      frameWidth: this.gestureFrameWidth,
+      frameHeight: this.gestureFrameHeight,
+      firstFrame: firstFrame
+    })
+
+    if (started) {
+      this.startCaptureLoop()
+    }
+  }
+
+  /**
+   * 鍋滄鎵嬪娍瀹炴椂璇嗗埆銆?
+   *
+   * @param preserveStatus 鏄惁淇濈暀鐘舵€佹枃妗?
+   */
+  private async stopGestureRecognition(preserveStatus: boolean = false): Promise<void> {
+    await this.recognitionSession.stop(preserveStatus)
+    this.stopCaptureLoop()
+  }
+
+  private async safeStopCamera(): Promise<void> {
+    try {
+      if (this.currentSession) {
+        await this.currentSession.stop()
+      }
+    } catch (error) {
+      const err = error as BusinessError
+      console.error(`鍋滄浼氳瘽澶辫触锛歝ode=${err.code}, message=${err.message}`)
+    }
+
+    try {
+      if (this.currentPreviewOutput) {
+        this.currentPreviewOutput.release()
+      }
+    } catch (error) {
+      const err = error as BusinessError
+      console.error(`閲婃斁棰勮杈撳嚭澶辫触锛歝ode=${err.code}, message=${err.message}`)
+    }
+
+    try {
+      if (this.currentCameraInput) {
+        this.currentCameraInput.close()
+      }
+    } catch (error) {
+      const err = error as BusinessError
+      console.error(`鍏抽棴鐩告満杈撳叆澶辫触锛歝ode=${err.code}, message=${err.message}`)
+    }
+
+    this.currentSession = undefined
+    this.currentPreviewOutput = undefined
+    this.currentCameraInput = undefined
+    this.currentCamera = undefined
+    this.cameraManager = undefined
+    this.previewStarted = false
+  }
+
+  @Builder
+  private buildTopBar(): void {
+    Row({ space: 12 }) {
+      Button() {
+        SymbolGlyph($r('sys.symbol.chevron_backward'))
+          .fontSize(22)
+          .fontColor([SECONDARY_TEXT])
+      }
+      .width(40)
+      .height(40)
+      .borderRadius(14)
+      .backgroundColor(SURFACE)
+      .stateEffect(false)
+      .onClick(() => {
+        this.goBack()
+      })
+
+      Text('鎵嬭璁粌')
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(TEXT_MAIN)
+
+      Blank()
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private buildReferenceCard(): void {
+    Row({ space: 16 }) {
+      if (this.coverUrl !== '') {
+        Image(this.coverUrl)
+          .width(120)
+          .height(120)
+          .borderRadius(16)
+          .objectFit(ImageFit.Cover)
+          .backgroundColor('#EEF2F6')
+      } else {
+        Stack({ alignContent: Alignment.Center }) {
+          Text(this.resourceCode === '' ? 'SIGN' : this.resourceCode)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#667085')
+            .textAlign(TextAlign.Center)
+        }
+        .width(120)
+        .height(120)
+        .borderRadius(16)
+        .backgroundColor('#EEF2F6')
+      }
+
+      Column({ space: 10 }) {
+        Text(this.getDisplayName())
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        Text(`鐩爣缂栫爜锛?{this.getCodeLabel()}`)
+          .fontSize(15)
+          .fontColor('#667085')
+
+        if (this.sigmlUrl !== '') {
+          Text('璧勬簮鏂囦欢宸插氨缁?)
+            .fontSize(14)
+            .fontColor('#12B76A')
+        }
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Center)
+    }
+    .width('100%')
+    .padding(18)
+    .backgroundColor(CARD_BG)
+    .borderRadius(20)
+  }
+
+  @Builder
+  private buildPracticeContent(): void {
+    Scroll() {
+      Column({ space: 20 }) {
+        this.buildReferenceCard()
+        GestureAvatarCard({
+          avatarStatusText: this.avatarStatusText,
+          avatarErrorText: this.avatarErrorText,
+          sigmlUrl: this.sigmlUrl,
+          avatarController: this.avatarPlaybackSession.getController(),
+          onPlay: (): void => {
+            void this.playAvatar()
+          },
+          onReplay: (): void => {
+            void this.replayAvatar()
+          },
+          onPageEnd: (): void => {
+            this.avatarPlaybackSession.handlePageEnd(this.sigmlUrl)
+          }
+        })
+
+        Button('鎵撳紑鐩告満')
+          .width('100%')
+          .height(54)
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .borderRadius(27)
+          .backgroundColor('#111827')
+          .fontColor('#FFFFFF')
+          .onClick(async () => {
+            await this.openCameraOverlay()
+          })
+      }
+      .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .padding({ left: 0, right: 0, top: 6, bottom: 20 })
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(SURFACE)
+    .scrollBar(BarState.Off)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  @Builder
+  private buildContentArea(): void {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.buildPracticeContent()
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .clip(true)
+    .backgroundColor(SURFACE)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  build() {
+    Stack() {
+      Column({ space: 16 }) {
+        this.buildTopBar()
+        this.buildContentArea()
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ left: 16, right: 16, top: 16, bottom: 0 })
+      .backgroundColor(SURFACE)
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      if (this.showCameraOverlay) {
+        GestureCameraOverlay({
+          xComponentController: this.xComponentController,
+          overlayTopPadding: this.getOverlayTopPadding(),
+          overlayBottomPadding: this.getOverlayBottomPadding(),
+          cameraStatusText: this.cameraStatusText,
+          previewStarted: this.previewStarted,
+          datasetCountdownText: this.datasetCountdownText,
+          targetName: this.getDisplayName(),
+          targetCodeLabel: this.getCodeLabel(),
+          recognitionStatusText: this.recognitionStatusText,
+          hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+          recognitionModelVersionName: this.recognitionModelVersionName,
+          recognitionUsingPublishedModel: this.recognitionUsingPublishedModel,
+          enableDatasetCollect: this.enableDatasetCollect,
+          datasetStatusText: this.datasetStatusText,
+          datasetValidFrames: this.datasetValidFrames,
+          datasetWindowSize: this.datasetWindowSize,
+          primaryButtonText: this.getPrimaryButtonText(),
+          isDatasetCollecting: this.isDatasetCollecting,
+          isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
+          onSurfaceLoaded: (): void => {
+            void this.handleSurfaceLoaded()
+          },
+          onSurfaceDestroy: (): void => {
+            void this.safeStopCamera()
+          },
+          onClose: (): void => {
+            void this.closeCameraOverlay()
+          },
+          onToggleRecognition: (): void => {
+            if (this.hasRecognitionSucceeded) {
+              void this.startGestureRecognition()
+              return
+            }
+
+            if (this.isRecognizing) {
+              void this.stopGestureRecognition(false)
+            } else {
+              void this.startGestureRecognition()
+            }
+          },
+          onStartDatasetCollect: (): void => {
+            void this.startDatasetCollect()
+          },
+          onStopDatasetCollect: (): void => {
+            void this.stopDatasetCollect()
+          },
+          onConfirmSaveDataset: (): void => {
+            void this.confirmSaveDataset()
+          },
+          onDiscardDataset: (): void => {
+            void this.discardPendingDataset()
+          }
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+}

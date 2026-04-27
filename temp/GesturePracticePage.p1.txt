@@ -1,0 +1,316 @@
+﻿import { router, window, display } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
+import { camera } from '@kit.CameraKit'
+import { image } from '@kit.ImageKit'
+import { BusinessError } from '@kit.BasicServicesKit'
+import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl'
+
+import { AppConfig } from '../common/constants/AppConfig'
+import { GesturePracticePageParams } from '../model/GestureModels'
+
+import { GestureCameraOverlay } from '../components/gesture/GestureCameraOverlay'
+import { GestureAvatarCard } from '../components/gesture/GestureAvatarCard'
+import {
+  GestureRecognitionSessionService,
+  GestureRecognitionSessionState
+} from '../service/gesture/GestureRecognitionSessionService'
+import {
+  DatasetCollectSessionService,
+  DatasetCollectSessionState
+} from '../service/gesture/DatasetCollectSessionService'
+import {
+  GestureAvatarPlaybackService,
+  GestureAvatarPlaybackState
+} from '../service/gesture/GestureAvatarPlaybackService'
+
+const TEXT_MAIN: string = '#11233C'
+const SECONDARY_TEXT: string = '#6B7A90'
+const SURFACE: string = '#FFFFFF'
+const CARD_BG: string = '#F7F8FA'
+
+@Entry
+@Component
+struct GesturePracticePage {
+  @State gestureId: number = 0
+  @State chineseName: string = ''
+  @State resourceCode: string = ''
+  @State sigmlUrl: string = ''
+  @State coverUrl: string = ''
+
+  @State showCameraOverlay: boolean = false
+  @State surfaceId: string = ''
+  @State cameraStatusText: string = '绛夊緟鎵撳紑鐩告満'
+  @State previewStarted: boolean = false
+
+  @State topSafeInsetVp: number = 0
+  @State bottomSafeInsetVp: number = 0
+
+  @State recognitionStatusText: string = '鐐瑰嚮寮€濮嬭瘑鍒?
+  @State isRecognizing: boolean = false
+  @State hasRecognitionSucceeded: boolean = false
+
+  /** 褰撳墠瀹炴椂璇嗗埆鏈嶅姟浣跨敤鐨勬ā鍨嬬増鏈悕绉般€?*/
+  @State recognitionModelVersionName: string = '灏氭湭寤虹珛璇嗗埆浼氳瘽'
+
+  /** 褰撳墠瀹炴椂璇嗗埆鏄惁浣跨敤绠＄悊绔彂甯冩ā鍨嬨€?*/
+  @State recognitionUsingPublishedModel: boolean = false
+
+  /** 鏄惁鍚敤寮€鍙戣€?raw dataset 閲囬泦妯″紡銆?*/
+  @StorageLink('developer.datasetCollect.enabled') enableDatasetCollect: boolean = false
+
+  @State datasetStatusText: string = '鍙湪鏌ョ湅鏁板瓧浜哄悗閲囬泦褰撳墠鍔ㄤ綔鏍锋湰'
+  @State isDatasetCollecting: boolean = false
+  @State datasetValidFrames: number = 0
+  @State datasetWindowSize: number = 30
+  @State datasetCountdownText: string = ''
+  @State isDatasetWaitingConfirm: boolean = false
+
+  @State avatarStatusText: string = '鏁板瓧浜哄姞杞戒腑'
+  @State avatarErrorText: string = ''
+
+  private xComponentController: XComponentController = new XComponentController()
+
+  private cameraManager?: camera.CameraManager
+  private currentCamera?: camera.CameraDevice
+  private currentCameraInput?: camera.CameraInput
+  private currentPreviewOutput?: camera.PreviewOutput
+  private currentSession?: camera.PhotoSession
+
+  private isCameraStarting: boolean = false
+
+  /** 鎵嬪娍瀹炴椂璇嗗埆浼氳瘽鏈嶅姟銆?*/
+  private recognitionSession: GestureRecognitionSessionService = new GestureRecognitionSessionService()
+
+  /** raw dataset 閲囬泦浼氳瘽鏈嶅姟銆?*/
+  private datasetCollectSession: DatasetCollectSessionService = new DatasetCollectSessionService()
+
+  /** 鏁板瓧浜烘挱鏀句細璇濇湇鍔°€?*/
+  private avatarPlaybackSession: GestureAvatarPlaybackService = new GestureAvatarPlaybackService()
+
+  /**
+   * 鎵嬪娍璇嗗埆甯у彂閫侀棿闅斻€?
+   *
+   * 100ms 瀵瑰簲 10FPS銆?
+   * 闇€瑕佷笌璁粌閲囬泦 FPS銆佹ā鍨嬬獥鍙?FPS 淇濇寔涓€鑷淬€?
+   */
+  private readonly frameSendIntervalMs: number = 100
+
+  /**
+   * 涓婃姤缁欒瘑鍒湇鍔＄殑甯х巼銆?
+   *
+   * 褰撳墠缁熶竴涓?10FPS锛?0 甯у搴?3 绉掑姩浣滅獥鍙ｃ€?
+   */
+
+  private captureTimerId: number = -1
+  private captureInProgress: boolean = false
+
+  private gestureFrameWidth: number = 320
+  private gestureFrameHeight: number = 240
+
+  private readonly jpegQuality: number = 80
+
+  /**
+   * 鍓嶇鍙戦€佺粰鍚庣鍓嶆槸鍚︽棆杞浘鍍忋€?
+   *
+   * 鍚庣涓嶅啀鍋?rotate锛屾墍浠ヨ繖閲岃礋璐ｆ妸鐢婚潰鏁寸悊鍒?MediaPipe 鍙洿鎺ヨ瘑鍒殑鏂瑰悜銆?
+   */
+  private readonly shouldRotateFrameBeforeSend: boolean = true
+
+  /**
+   * 鍓嶇鍙戦€佺粰鍚庣鍓嶇殑鏃嬭浆瑙掑害銆?
+   *
+   * PixelMap.rotate(90) 琛ㄧず椤烘椂閽堟棆杞?90 搴︺€?
+   * 濡傛灉鍚庣浠ュ墠浣跨敤 cv2.ROTATE_90_COUNTERCLOCKWISE 鎵嶆槸姝ｇ‘鏂瑰悜锛?
+   * 閭ｈ繖閲屽彲鑳介渶瑕佹敼鎴?270銆?
+   */
+  private readonly frameRotateDegreesBeforeSend: number = 270
+
+  /**
+   * 鍓嶇鍙戦€佺粰鍚庣鍓嶆槸鍚︽按骞抽暅鍍忋€?
+   *
+   * 鐩爣锛氳鍙戦€佺粰鍚庣鐨?JPEG 涓庢墜鏈鸿嚜鎷嶉瑙堢殑宸﹀彸鏁堟灉涓€鑷淬€?
+   */
+  private readonly shouldMirrorFrameBeforeSend: boolean = true
+
+  aboutToAppear(): void {
+    this.recognitionSession.setOnStateChange((state: GestureRecognitionSessionState): void => {
+      this.applyGestureRecognitionState(state)
+    })
+    this.recognitionSession.setOnSessionStopped((): void => {
+      if (!this.isDatasetCollecting && !this.isDatasetWaitingConfirm) {
+        this.stopCaptureLoop()
+      }
+    })
+    this.datasetCollectSession.setOnStateChange((state: DatasetCollectSessionState): void => {
+      this.applyDatasetCollectState(state)
+    })
+    this.avatarPlaybackSession.setOnStateChange((state: GestureAvatarPlaybackState): void => {
+      this.applyAvatarPlaybackState(state)
+    })
+    this.readParams()
+  }
+
+  aboutToDisappear(): void {
+    this.stopCaptureLoop()
+    this.safeStopCamera()
+    void this.recognitionSession.disconnect()
+    void this.datasetCollectSession.disconnect()
+    void this.stopAvatar()
+    this.avatarPlaybackSession.markPageNotReady()
+  }
+
+  private readParams(): void {
+    try {
+      const params = router.getParams() as GesturePracticePageParams
+      if (params) {
+        this.gestureId = Number(params.resourceId)
+        this.chineseName = String(params.chineseName)
+        this.resourceCode = String(params.resourceCode)
+        this.sigmlUrl = String(params.sigmlUrl)
+        this.coverUrl = String(params.coverUrl)
+        this.persistRecentPractice()
+      }
+    } catch (err) {
+      console.error(`璇诲彇璁粌椤靛弬鏁板け璐ワ細${JSON.stringify(err)}`)
+    }
+  }
+
+  private persistRecentPractice(): void {
+    AppStorage.setOrCreate('recent.practice.id', this.gestureId)
+    AppStorage.setOrCreate('recent.practice.code', this.resourceCode)
+    AppStorage.setOrCreate('recent.practice.name', this.chineseName === '' ? this.resourceCode : this.chineseName)
+    AppStorage.setOrCreate('recent.practice.sigmlUrl', this.sigmlUrl)
+    AppStorage.setOrCreate('recent.practice.coverUrl', this.coverUrl)
+  }
+
+  /**
+   * 搴旂敤 raw dataset 閲囬泦浼氳瘽鐘舵€併€?
+   *
+   * @param state 閲囬泦浼氳瘽鐘舵€?
+   */
+  private applyDatasetCollectState(state: DatasetCollectSessionState): void {
+    this.datasetStatusText = state.datasetStatusText
+    this.isDatasetCollecting = state.isDatasetCollecting
+    this.datasetValidFrames = state.datasetValidFrames
+    this.datasetWindowSize = state.datasetWindowSize
+    this.datasetCountdownText = state.datasetCountdownText
+    this.isDatasetWaitingConfirm = state.isDatasetWaitingConfirm
+  }
+
+  /**
+   * 搴旂敤鎵嬪娍瀹炴椂璇嗗埆浼氳瘽鐘舵€併€?
+   *
+   * @param state 璇嗗埆浼氳瘽鐘舵€?
+   */
+  private applyGestureRecognitionState(state: GestureRecognitionSessionState): void {
+    this.recognitionStatusText = state.recognitionStatusText
+    this.isRecognizing = state.isRecognizing
+    this.hasRecognitionSucceeded = state.hasRecognitionSucceeded
+    this.recognitionModelVersionName = state.recognitionModelVersionName
+    this.recognitionUsingPublishedModel = state.recognitionUsingPublishedModel
+  }
+
+  /**
+   * 搴旂敤鏁板瓧浜烘挱鏀剧姸鎬併€?
+   *
+   * @param state 鏁板瓧浜烘挱鏀剧姸鎬?
+   */
+  private applyAvatarPlaybackState(state: GestureAvatarPlaybackState): void {
+    this.avatarStatusText = state.avatarStatusText
+    this.avatarErrorText = state.avatarErrorText
+  }
+
+  private getDisplayName(): string {
+    if (this.chineseName !== '') {
+      return this.chineseName
+    }
+    if (this.resourceCode !== '') {
+      return this.resourceCode
+    }
+    return '鎵嬭璁粌'
+  }
+
+  private getCodeLabel(): string {
+    return this.resourceCode === '' ? '鏈缃? : this.resourceCode
+  }
+
+  /**
+   * 鎾斁鏁板瓧浜虹ず鑼冦€?
+   */
+  private async playAvatar(): Promise<void> {
+    await this.avatarPlaybackSession.play(this.sigmlUrl)
+  }
+
+  /**
+   * 閲嶆柊鎾斁鏁板瓧浜虹ず鑼冦€?
+   */
+  private async replayAvatar(): Promise<void> {
+    await this.avatarPlaybackSession.replay(this.sigmlUrl)
+  }
+
+  /**
+   * 鍋滄鏁板瓧浜烘挱鏀俱€?
+   */
+  private async stopAvatar(): Promise<void> {
+    await this.avatarPlaybackSession.stop()
+  }
+
+  private goBack(): void {
+    try {
+      router.back()
+    } catch (err) {
+      console.error(`杩斿洖璧勬簮鍒楄〃椤靛け璐ワ細${JSON.stringify(err)}`)
+    }
+  }
+
+  private async openCameraOverlay(): Promise<void> {
+    this.cameraStatusText = '绛夊緟鍒涘缓棰勮鐢婚潰'
+    this.previewStarted = false
+    this.resetRecognitionView()
+    await this.updateWindowImmersive(true)
+    this.showCameraOverlay = true
+  }
+
+  private async closeCameraOverlay(): Promise<void> {
+    await this.stopGestureRecognition(true)
+    await this.stopDatasetCollect(true)
+    await this.safeStopCamera()
+    this.showCameraOverlay = false
+    this.surfaceId = ''
+    this.previewStarted = false
+    this.cameraStatusText = '绛夊緟鎵撳紑鐩告満'
+    this.resetRecognitionView()
+    await this.updateWindowImmersive(false)
+  }
+
+  private async requestCameraPermission(): Promise<boolean> {
+    const context = getContext(this) as common.UIAbilityContext
+    const atManager = abilityAccessCtrl.createAtManager()
+    const permissions: Array<Permissions> = ['ohos.permission.CAMERA']
+
+    try {
+      const result = await atManager.requestPermissionsFromUser(context, permissions)
+      if (!result || !result.authResults || result.authResults.length === 0) {
+        return false
+      }
+      return result.authResults.every((item: number) => item === 0)
+    } catch (error) {
+      const err = error as BusinessError
+      console.error(`鐢宠鐩告満鏉冮檺澶辫触锛歝ode=${err.code}, message=${err.message}`)
+      return false
+    }
+  }
+
+  private async updateWindowImmersive(enable: boolean): Promise<void> {
+    try {
+      const context = getContext(this) as common.UIAbilityContext
+      const win = await window.getLastWindow(context)
+
+      await win.setWindowLayoutFullScreen(enable)
+
+      if (enable) {
+        const systemArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
+        const navArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR)
+
+        this.topSafeInsetVp = px2vp(systemArea.topRect.height)
+        this.bottomSafeInsetVp = px2vp(navArea.bottomRect.height)
