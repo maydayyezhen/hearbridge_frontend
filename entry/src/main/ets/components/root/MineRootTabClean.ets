@@ -1,7 +1,7 @@
 import { MineMenuVisualCard, MineProfileHeaderCard } from './MineProfileVisualCards'
 import { MineRootTab } from './MineRootTab'
 
-const PAGE_BG: string = '#F8FBFF'
+const PAGE_BG: string = '#FFFFFF'
 
 /**
  * 我的页正式版容器。
