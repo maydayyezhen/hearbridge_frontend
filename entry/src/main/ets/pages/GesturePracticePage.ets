@@ -1,5 +1,4 @@
 import { router, window, display } from '@kit.ArkUI'
-import { webview } from '@kit.ArkWeb'
 import { common } from '@kit.AbilityKit'
 import { camera } from '@kit.CameraKit'
 import { image } from '@kit.ImageKit'
@@ -8,14 +7,21 @@ import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl'
 
 import { AppConfig } from '../common/constants/AppConfig'
 import { GesturePracticePageParams } from '../model/GestureModels'
-import { GestureWsApi } from '../api/GestureWsApi'
-import { GestureWsResultMessage } from '../model/GestureWsModels'
 
-import { DatasetWsApi } from '../api/DatasetWsApi'
-import { DatasetWsStatusMessage } from '../model/DatasetWsModels'
-import { GestureRecognitionPanel } from '../components/gesture/GestureRecognitionPanel'
-import { GestureDatasetCollectPanel } from '../components/gesture/GestureDatasetCollectPanel'
-import { GestureCameraActionPanel } from '../components/gesture/GestureCameraActionPanel'
+import { GestureCameraOverlay } from '../components/gesture/GestureCameraOverlay'
+import { GestureAvatarCard } from '../components/gesture/GestureAvatarCard'
+import {
+  GestureRecognitionSessionService,
+  GestureRecognitionSessionState
+} from '../service/gesture/GestureRecognitionSessionService'
+import {
+  DatasetCollectSessionService,
+  DatasetCollectSessionState
+} from '../service/gesture/DatasetCollectSessionService'
+import {
+  GestureAvatarPlaybackService,
+  GestureAvatarPlaybackState
+} from '../service/gesture/GestureAvatarPlaybackService'
 
 
 @Entry
@@ -59,8 +65,6 @@ struct GesturePracticePage {
   @State avatarErrorText: string = ''
 
   private xComponentController: XComponentController = new XComponentController()
-  private avatarController: webview.WebviewController = new webview.WebviewController()
-  private avatarPageReady: boolean = false
 
   private cameraManager?: camera.CameraManager
   private currentCamera?: camera.CameraDevice
@@ -70,11 +74,14 @@ struct GesturePracticePage {
 
   private isCameraStarting: boolean = false
 
-  private gestureWsApi: GestureWsApi = new GestureWsApi()
+  /** 手势实时识别会话服务。 */
+  private recognitionSession: GestureRecognitionSessionService = new GestureRecognitionSessionService()
 
-  private datasetWsApi: DatasetWsApi = new DatasetWsApi()
+  /** raw dataset 采集会话服务。 */
+  private datasetCollectSession: DatasetCollectSessionService = new DatasetCollectSessionService()
 
-  private isFrameSending: boolean = false
+  /** 数字人播放会话服务。 */
+  private avatarPlaybackSession: GestureAvatarPlaybackService = new GestureAvatarPlaybackService()
 
   /**
    * 手势识别帧发送间隔。
@@ -94,24 +101,9 @@ struct GesturePracticePage {
   private captureTimerId: number = -1
   private captureInProgress: boolean = false
 
-  /** 识别链路待发送的最新帧。 */
-  private pendingFrame: ArrayBuffer | null = null
-
-  /** 采集链路待发送的最新帧。 */
-  private pendingDatasetFrame: ArrayBuffer | null = null
-
-  /** 采集链路当前是否正在发送帧。 */
-  private isDatasetFrameSending: boolean = false
 
   private gestureFrameWidth: number = 320
   private gestureFrameHeight: number = 240
-
-  /**
-   * 上报给识别服务的帧率。
-   *
-   * 当前统一为 10FPS，30 帧对应 3 秒动作窗口。
-   */
-  private readonly gestureFrameFps: number = 10
 
   private readonly jpegQuality: number = 80
 
@@ -138,29 +130,32 @@ struct GesturePracticePage {
    */
   private readonly shouldMirrorFrameBeforeSend: boolean = true
 
-  /** raw dataset 采集帧率。 */
-  private readonly datasetFrameFps: number = 10
-
-  /** raw dataset 单个样本窗口大小。 */
-  private readonly datasetWindowFrameCount: number = 30
-
-  /** 点击采集后给用户准备动作的倒计时秒数。 */
-  private readonly datasetPrepareSeconds: number = 3
-
-  /** raw dataset 采集倒计时开始时间戳。 */
-  private datasetPrepareStartTime: number = 0
 
   aboutToAppear(): void {
+    this.recognitionSession.setOnStateChange((state: GestureRecognitionSessionState): void => {
+      this.applyGestureRecognitionState(state)
+    })
+    this.recognitionSession.setOnSessionStopped((): void => {
+      if (!this.isDatasetCollecting && !this.isDatasetWaitingConfirm) {
+        this.stopCaptureLoop()
+      }
+    })
+    this.datasetCollectSession.setOnStateChange((state: DatasetCollectSessionState): void => {
+      this.applyDatasetCollectState(state)
+    })
+    this.avatarPlaybackSession.setOnStateChange((state: GestureAvatarPlaybackState): void => {
+      this.applyAvatarPlaybackState(state)
+    })
     this.readParams()
   }
 
   aboutToDisappear(): void {
     this.stopCaptureLoop()
     this.safeStopCamera()
-    this.gestureWsApi.disconnect()
-    this.datasetWsApi.disconnect()
+    void this.recognitionSession.disconnect()
+    void this.datasetCollectSession.disconnect()
     void this.stopAvatar()
-    this.avatarPageReady = false
+    this.avatarPlaybackSession.markPageNotReady()
   }
 
   private readParams(): void {
@@ -187,6 +182,43 @@ struct GesturePracticePage {
     AppStorage.setOrCreate('recent.practice.coverUrl', this.coverUrl)
   }
 
+  /**
+   * 应用 raw dataset 采集会话状态。
+   *
+   * @param state 采集会话状态
+   */
+  private applyDatasetCollectState(state: DatasetCollectSessionState): void {
+    this.datasetStatusText = state.datasetStatusText
+    this.isDatasetCollecting = state.isDatasetCollecting
+    this.datasetValidFrames = state.datasetValidFrames
+    this.datasetWindowSize = state.datasetWindowSize
+    this.datasetCountdownText = state.datasetCountdownText
+    this.isDatasetWaitingConfirm = state.isDatasetWaitingConfirm
+  }
+
+  /**
+   * 应用手势实时识别会话状态。
+   *
+   * @param state 识别会话状态
+   */
+  private applyGestureRecognitionState(state: GestureRecognitionSessionState): void {
+    this.recognitionStatusText = state.recognitionStatusText
+    this.isRecognizing = state.isRecognizing
+    this.hasRecognitionSucceeded = state.hasRecognitionSucceeded
+    this.recognitionModelVersionName = state.recognitionModelVersionName
+    this.recognitionUsingPublishedModel = state.recognitionUsingPublishedModel
+  }
+
+  /**
+   * 应用数字人播放状态。
+   *
+   * @param state 数字人播放状态
+   */
+  private applyAvatarPlaybackState(state: GestureAvatarPlaybackState): void {
+    this.avatarStatusText = state.avatarStatusText
+    this.avatarErrorText = state.avatarErrorText
+  }
+
   private getDisplayName(): string {
     if (this.chineseName !== '') {
       return this.chineseName
@@ -201,76 +233,25 @@ struct GesturePracticePage {
     return this.resourceCode === '' ? '未设置' : this.resourceCode
   }
 
-  private buildAvatarBootstrapScript(playNow: boolean): string {
-    const payload = JSON.stringify({
-      sigmlUrl: this.sigmlUrl,
-      cwaBase: AppConfig.buildRuntimeBaseUrl(),
-      sigmlBase: AppConfig.buildDemoSigmlBaseUrl(),
-      avJARBase: AppConfig.buildAvatarJarBaseUrl()
-    })
-
-    const playScript = playNow ? "window.playCurrentSign && window.playCurrentSign();" : ''
-    return `window.setAvatarConfig && window.setAvatarConfig(${payload}); ${playScript} 'ok';`
-  }
-
-  private async syncAvatar(playNow: boolean): Promise<void> {
-    if (!this.avatarPageReady) {
-      this.avatarStatusText = '数字人画面还在加载'
-      return
-    }
-
-    if (this.sigmlUrl === '') {
-      this.avatarStatusText = '当前资源没有可播放的 SiGML 文件'
-      return
-    }
-
-    try {
-      await this.avatarController.runJavaScript(this.buildAvatarBootstrapScript(playNow))
-      this.avatarErrorText = ''
-      this.avatarStatusText = playNow ? '数字人正在播放' : '数字人已就绪'
-    } catch (err) {
-      this.avatarErrorText = `同步数字人配置失败：${JSON.stringify(err)}`
-      this.avatarStatusText = '数字人加载失败'
-      console.error(this.avatarErrorText)
-    }
-  }
-
+  /**
+   * 播放数字人示范。
+   */
   private async playAvatar(): Promise<void> {
-    await this.syncAvatar(true)
+    await this.avatarPlaybackSession.play(this.sigmlUrl)
   }
 
+  /**
+   * 重新播放数字人示范。
+   */
   private async replayAvatar(): Promise<void> {
-    if (!this.avatarPageReady) {
-      this.avatarStatusText = '数字人画面还在加载'
-      return
-    }
-
-    if (this.sigmlUrl === '') {
-      this.avatarStatusText = '当前资源没有可播放的 SiGML 文件'
-      return
-    }
-
-    try {
-      await this.avatarController.runJavaScript("window.replayCurrentSign && window.replayCurrentSign(); 'ok';")
-      this.avatarErrorText = ''
-      this.avatarStatusText = '数字人已重新播放'
-    } catch (err) {
-      this.avatarErrorText = `重播数字人失败：${JSON.stringify(err)}`
-      this.avatarStatusText = '数字人重播失败'
-      console.error(this.avatarErrorText)
-    }
+    await this.avatarPlaybackSession.replay(this.sigmlUrl)
   }
 
+  /**
+   * 停止数字人播放。
+   */
   private async stopAvatar(): Promise<void> {
-    if (!this.avatarPageReady) {
-      return
-    }
-
-    try {
-      await this.avatarController.runJavaScript("window.stopCurrentSign && window.stopCurrentSign(); 'ok';")
-    } catch (err) {
-      console.error(`停止数字人播放失败：${JSON.stringify(err)}`)
-    }
+    await this.avatarPlaybackSession.stop()
   }
 
   private goBack(): void {
@@ -607,13 +588,7 @@ struct GesturePracticePage {
       this.captureTimerId = -1
     }
 
-    this.pendingFrame = null
-    this.pendingDatasetFrame = null
-
     this.captureInProgress = false
-    this.isFrameSending = false
-    this.isDatasetFrameSending = false
-
     this.datasetCountdownText = ''
   }
 
@@ -635,14 +610,14 @@ struct GesturePracticePage {
       }
 
       // 识别链路：发送给 /ws/gesture
-      if (this.isRecognizing && !this.hasRecognitionSucceeded) {
-        this.enqueueFrame(jpegBytes)
+      if (this.recognitionSession.canAcceptFrame()) {
+        this.recognitionSession.enqueueFrame(jpegBytes)
       }
 
       // 采集链路：发送给 /ws/dataset
       // 注意：这里不 await，避免采集发送阻塞抓帧循环。
-      if (this.enableDatasetCollect && this.isDatasetCollecting) {
-        this.enqueueDatasetFrame(jpegBytes)
+      if (this.enableDatasetCollect && this.datasetCollectSession.canAcceptFrame()) {
+        this.datasetCollectSession.enqueueFrame(jpegBytes)
       }
     } catch (error) {
       console.error(`[GesturePracticePage] unified frame loop error: ${JSON.stringify(error)}`)
@@ -652,427 +627,80 @@ struct GesturePracticePage {
   }
 
   /**
-   * 将采集链路的最新帧放入待发送槽位。
-   *
-   * 设计目标：
-   * - 不阻塞抓帧循环
-   * - 如果发送慢，只保留最新帧
-   * - 旧帧会被自然覆盖，避免采集画面卡顿
+   * 开始 raw dataset 采集。
    */
-  private enqueueDatasetFrame(frame: ArrayBuffer): void {
-    this.pendingDatasetFrame = frame
-    void this.flushPendingDatasetFrame()
+  private async startDatasetCollect(): Promise<void> {
+    const started = await this.datasetCollectSession.start({
+      enableDatasetCollect: this.enableDatasetCollect,
+      isRecognizing: this.isRecognizing,
+      previewStarted: this.previewStarted,
+      hasSurface: this.surfaceId !== '',
+      resourceCode: this.resourceCode
+    })
+
+    if (started) {
+      this.startCaptureLoop()
+    }
   }
 
   /**
-   * 发送采集链路中最新的一帧。
+   * 停止 raw dataset 采集。
    *
-   * 与识别链路类似，采用“最新帧优先”策略：
-   * - 同一时间只发送一帧
-   * - 发送期间来了新帧，只保留最新的一帧
-   * - 当前帧发完后，如果还有 pending 帧，再继续发
+   * @param preserveStatus 是否保留状态文案
    */
-  private async flushPendingDatasetFrame(): Promise<void> {
-    if (this.isDatasetFrameSending || this.pendingDatasetFrame === null) {
-      return
-    }
-
-    if (!this.enableDatasetCollect || !this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
-      this.pendingDatasetFrame = null
-      return
-    }
-
-    const frame = this.pendingDatasetFrame
-    this.pendingDatasetFrame = null
-    this.isDatasetFrameSending = true
-
-    try {
-      await this.handleDatasetFrame(frame)
-    } finally {
-      this.isDatasetFrameSending = false
-
-      if (this.pendingDatasetFrame !== null) {
-        void this.flushPendingDatasetFrame()
-      }
-    }
-  }
-
-  private async handleDatasetFrame(jpegBytes: ArrayBuffer): Promise<void> {
-    if (!this.enableDatasetCollect || !this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
-      return
-    }
-
-    const elapsedMs = Date.now() - this.datasetPrepareStartTime
-    const remainingMs = this.datasetPrepareSeconds * 1000 - elapsedMs
-
-    if (remainingMs > 0) {
-      const remainingSecond = Math.ceil(remainingMs / 1000)
-      this.datasetCountdownText = `${remainingSecond}`
-      this.datasetStatusText = `准备采集：${remainingSecond} 秒后开始`
-      return
-    }
-
-    this.datasetCountdownText = ''
-
-    if (!this.datasetWsApi.isConnected()) {
-      return
-    }
-
-    await this.datasetWsApi.sendFrame(jpegBytes)
-  }
-
-  private async startDatasetCollect(): Promise<void> {
-    if (!this.enableDatasetCollect) {
-      this.datasetStatusText = '开发者采集模式未开启，普通用户不能采集 raw dataset 样本'
-      return
-    }
-
-    if (this.isDatasetCollecting) {
-      return
-    }
-
-    if (this.isRecognizing) {
-      this.datasetStatusText = '请先停止识别，再采集样本'
-      return
-    }
-
-    if (!this.previewStarted || !this.surfaceId) {
-      this.datasetStatusText = '相机预览尚未就绪'
-      return
-    }
-
-    if (this.resourceCode === '') {
-      this.datasetStatusText = '当前动作编码为空，无法采集'
-      return
-    }
-
-    this.datasetValidFrames = 0
-    this.datasetWindowSize = this.datasetWindowFrameCount
-    this.datasetCountdownText = ''
-    this.isDatasetWaitingConfirm = false
-    this.datasetPrepareStartTime = Date.now()
-    this.isDatasetCollecting = true
-    this.datasetStatusText = `准备采集当前动作：${this.resourceCode}`
-
-    const connected = await this.datasetWsApi.connect(
-      (message: DatasetWsStatusMessage) => {
-        this.handleDatasetStatus(message)
-      },
-      (message: string) => {
-        this.datasetStatusText = message
-      },
-      () => {
-        this.isDatasetCollecting = false
-        this.datasetCountdownText = ''
-        this.datasetStatusText = '采集连接已关闭'
-      }
-    )
-
-    if (!connected) {
-      this.isDatasetCollecting = false
-      this.datasetStatusText = '连接采集服务失败'
-      return
-    }
-
-    const started = await this.datasetWsApi.startDataset(
-      this.resourceCode,
-      this.datasetFrameFps,
-      this.datasetWindowFrameCount
-    )
-
-    if (!started) {
-      this.isDatasetCollecting = false
-      this.datasetStatusText = '启动采集失败'
-      await this.datasetWsApi.disconnect()
-      return
-    }
-
-    this.startCaptureLoop()
-  }
-
   private async stopDatasetCollect(preserveStatus: boolean = false): Promise<void> {
-    const wasCollecting = this.isDatasetCollecting
-    const wasWaitingConfirm = this.isDatasetWaitingConfirm
-
-    this.isDatasetCollecting = false
-    this.isDatasetWaitingConfirm = false
-    this.datasetCountdownText = ''
-
-    this.pendingDatasetFrame = null
-    this.isDatasetFrameSending = false
-
-    if (wasCollecting || wasWaitingConfirm) {
-      await this.datasetWsApi.cancelDataset()
-    }
-
-    await this.datasetWsApi.disconnect()
-
-    if (!preserveStatus) {
-      this.datasetStatusText = wasWaitingConfirm ? '待确认样本已取消' : '采集已取消'
-      this.datasetValidFrames = 0
-    }
+    await this.datasetCollectSession.stop(preserveStatus)
   }
 
+  /**
+   * 确认保存当前待确认样本。
+   */
   private async confirmSaveDataset(): Promise<void> {
-    if (!this.isDatasetWaitingConfirm) {
-      return
-    }
-
-    const success = await this.datasetWsApi.saveDataset()
-    if (!success) {
-      this.datasetStatusText = '确认保存失败：采集服务未连接'
-    }
+    await this.datasetCollectSession.confirmSave()
   }
 
+  /**
+   * 丢弃当前待确认样本。
+   */
   private async discardPendingDataset(): Promise<void> {
-    if (!this.isDatasetWaitingConfirm) {
-      return
-    }
-
-    const success = await this.datasetWsApi.discardDataset()
-    if (!success) {
-      this.isDatasetWaitingConfirm = false
-      this.datasetValidFrames = 0
-      this.datasetStatusText = '丢弃失败：采集服务未连接，已在前端清空状态'
-      await this.datasetWsApi.disconnect()
-    }
-  }
-
-  private handleDatasetStatus(message: DatasetWsStatusMessage): void {
-    this.datasetValidFrames = message.validFrames
-    this.datasetWindowSize = message.windowSize > 0 ? message.windowSize : this.datasetWindowFrameCount
-
-    if (message.status === 'ready') {
-      this.datasetStatusText = '采集服务已就绪，请摆好动作'
-      return
-    }
-
-    if (message.status === 'invalid_frame') {
-      this.datasetStatusText = message.message.length > 0 ? message.message : '无效帧：请露出双肩和手部'
-      return
-    }
-
-    if (message.status === 'collecting') {
-      this.datasetStatusText = `采集中：${this.datasetValidFrames}/${this.datasetWindowSize}`
-      return
-    }
-
-    if (message.status === 'ready_to_save') {
-      this.isDatasetCollecting = false
-      this.isDatasetWaitingConfirm = true
-      this.datasetCountdownText = ''
-
-      this.pendingDatasetFrame = null
-      this.isDatasetFrameSending = false
-
-      this.datasetValidFrames = this.datasetWindowSize
-      this.datasetStatusText = message.message.length > 0 ? message.message : '样本采集完成，请确认是否保存'
-      return
-    }
-
-    if (message.status === 'saved') {
-      this.isDatasetCollecting = false
-      this.isDatasetWaitingConfirm = false
-      this.datasetCountdownText = ''
-      this.pendingDatasetFrame = null
-      this.isDatasetFrameSending = false
-      this.datasetValidFrames = this.datasetWindowSize
-      this.datasetStatusText = `采集保存成功：${message.label}`
-      this.datasetWsApi.disconnect()
-      return
-    }
-
-    if (message.status === 'discarded') {
-      this.isDatasetCollecting = false
-      this.isDatasetWaitingConfirm = false
-      this.datasetCountdownText = ''
-      this.pendingDatasetFrame = null
-      this.isDatasetFrameSending = false
-      this.datasetValidFrames = 0
-      this.datasetStatusText = '样本已丢弃，可重新采集'
-      this.datasetWsApi.disconnect()
-      return
-    }
-
-    if (message.status === 'cancelled') {
-      this.isDatasetCollecting = false
-      this.isDatasetWaitingConfirm = false
-      this.datasetCountdownText = ''
-      this.pendingDatasetFrame = null
-      this.isDatasetFrameSending = false
-      this.datasetStatusText = '采集已取消'
-      return
-    }
+    await this.datasetCollectSession.discardPending()
   }
 
 
 
-  private enqueueFrame(frame: ArrayBuffer): void {
-    this.pendingFrame = frame
-    void this.flushPendingFrame()
-  }
-
-  private async flushPendingFrame(): Promise<void> {
-    if (this.isFrameSending || this.pendingFrame === null) {
-      return
-    }
-
-    if (!this.isRecognizing || this.hasRecognitionSucceeded) {
-      return
-    }
-
-    if (!this.gestureWsApi.isConnected() || !this.gestureWsApi.isStarted()) {
-      return
-    }
-
-    const frame = this.pendingFrame
-    this.pendingFrame = null
-    this.isFrameSending = true
-
-    try {
-      await this.gestureWsApi.sendFrame(frame)
-    } finally {
-      this.isFrameSending = false
-      if (this.pendingFrame !== null) {
-        void this.flushPendingFrame()
-      }
-    }
-  }
-
+  /**
+   * 开始手势实时识别。
+   */
   private async startGestureRecognition(): Promise<void> {
-    if (this.isRecognizing) {
-      return
+    const firstFrame = this.previewStarted && this.surfaceId !== ''
+      ? await this.captureCurrentFrameAsJpeg()
+      : null
+
+    const started = await this.recognitionSession.start({
+      isDatasetBusy: this.isDatasetCollecting || this.isDatasetWaitingConfirm,
+      previewStarted: this.previewStarted,
+      hasSurface: this.surfaceId !== '',
+      resourceCode: this.resourceCode,
+      frameWidth: this.gestureFrameWidth,
+      frameHeight: this.gestureFrameHeight,
+      firstFrame: firstFrame
+    })
+
+    if (started) {
+      this.startCaptureLoop()
     }
-
-    if (this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
-      this.recognitionStatusText = '正在采集或等待保存样本，请先处理当前样本'
-      return
-    }
-
-    if (!this.previewStarted || !this.surfaceId) {
-      this.recognitionStatusText = '预览尚未就绪'
-      return
-    }
-
-    this.resetRecognitionView()
-    this.isRecognizing = true
-    this.recognitionStatusText = '请露出双肩，并将手势保持在画面内（0/30）'
-
-    const connected = await this.gestureWsApi.connect(
-      (result: GestureWsResultMessage) => {
-        console.warn(
-          `[HB_MODEL_VERSION][page] modelVersionName=${result.modelVersionName}, usingPublishedModel=${result.usingPublishedModel}`
-        )
-        console.info(
-          `[GesturePracticePage] result modelVersionName=${result.modelVersionName}, usingPublishedModel=${result.usingPublishedModel}`
-        )
-
-        this.recognitionModelVersionName =
-          result.modelVersionName && result.modelVersionName.length > 0
-            ? result.modelVersionName
-            : 'default'
-
-        this.recognitionUsingPublishedModel = result.usingPublishedModel
-        this.recognitionModelVersionName =
-          result.modelVersionName && result.modelVersionName.length > 0
-            ? result.modelVersionName
-            : 'default'
-
-        this.recognitionUsingPublishedModel = result.usingPublishedModel
-        this.handleGestureWsResult(result)
-      },
-      (_message: string) => {
-        this.recognitionStatusText = '识别服务异常'
-      },
-      () => {
-        this.isRecognizing = false
-        this.stopCaptureLoop()
-        if (!this.hasRecognitionSucceeded) {
-          this.recognitionStatusText = '识别已停止'
-        }
-      }
-    )
-
-    if (!connected) {
-      this.isRecognizing = false
-      this.recognitionStatusText = '识别服务连接失败'
-      return
-    }
-
-    const firstFrame = await this.captureCurrentFrameAsJpeg()
-    if (!firstFrame || this.gestureFrameWidth <= 0 || this.gestureFrameHeight <= 0) {
-      this.isRecognizing = false
-      this.recognitionStatusText = '首帧抓取失败'
-      await this.gestureWsApi.disconnect()
-      return
-    }
-
-    const started = await this.gestureWsApi.startSession(
-      this.gestureFrameWidth,
-      this.gestureFrameHeight,
-      this.gestureFrameFps,
-    )
-
-    if (!started) {
-      this.isRecognizing = false
-      this.recognitionStatusText = '识别服务启动失败'
-      await this.gestureWsApi.disconnect()
-      return
-    }
-
-    this.enqueueFrame(firstFrame)
   }
 
+  /**
+   * 停止手势实时识别。
+   *
+   * @param preserveStatus 是否保留状态文案
+   */
   private async stopGestureRecognition(preserveStatus: boolean = false): Promise<void> {
-    this.isRecognizing = false
+    await this.recognitionSession.stop(preserveStatus)
     this.stopCaptureLoop()
-
-    if (!preserveStatus) {
-      this.resetRecognitionView()
-    }
-
-    await this.gestureWsApi.disconnect()
   }
 
-  private async handleRecognitionSuccess(): Promise<void> {
-    if (this.hasRecognitionSucceeded) {
-      return
-    }
-
-    this.hasRecognitionSucceeded = true
-    this.recognitionStatusText = '识别成功'
-    await this.stopGestureRecognition(true)
-  }
-
-  private handleGestureWsResult(result: GestureWsResultMessage): void {
-    if (this.hasRecognitionSucceeded) {
-      return
-    }
-
-    if (result.status === 'no_hand' || result.status === 'missing_hand') {
-      this.recognitionStatusText = '未检测到有效动作，请露出双肩并将手势放入画面内'
-      return
-    }
-
-    if (result.status === 'warming_up') {
-      const safeTotal = result.windowSize > 0 ? result.windowSize : 30
-      const safeProgress = Math.max(0, Math.min(result.validFrames, safeTotal))
-      this.recognitionStatusText = `请保持上半身和手势在画面内（${safeProgress}/${safeTotal}）`
-      return
-    }
-
-    if (result.status === 'predicted') {
-      const recognizedLabel = result.label && result.label.length > 0 ? result.label : '未知动作'
-      if (result.label === this.resourceCode) {
-        void this.handleRecognitionSuccess()
-      } else {
-        this.recognitionStatusText = `当前识别为“${recognizedLabel}”，请调整动作后重试`
-      }
-      return
-    }
-
-    this.recognitionStatusText = '等待识别结果'
-  }
 
   private async safeStopCamera(): Promise<void> {
     try {
@@ -1186,260 +814,6 @@ struct GesturePracticePage {
     .borderRadius(20)
   }
 
-  @Builder
-  private buildAvatarCard(): void {
-    Column({ space: 18 }) {
-      Row({ space: 12 }) {
-        Column({ space: 6 }) {
-          Text('数字人演示')
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-
-          Text(this.avatarStatusText)
-            .fontSize(14)
-            .fontColor('#667085')
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Button('播放')
-          .height(42)
-          .padding({ left: 20, right: 20 })
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor('#2D6CDF')
-          .fontColor('#FFFFFF')
-          .borderRadius(21)
-          .onClick(() => {
-            void this.playAvatar()
-          })
-
-        Button('重播')
-          .height(42)
-          .padding({ left: 20, right: 20 })
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor('#0F172A')
-          .fontColor('#FFFFFF')
-          .borderRadius(21)
-          .onClick(() => {
-            void this.replayAvatar()
-          })
-      }
-      .width('100%')
-
-      Stack({ alignContent: Alignment.Center }) {
-        Web({
-          src: $rawfile('sign-avatar/index.html'),
-          controller: this.avatarController
-        })
-          .javaScriptAccess(true)
-          .domStorageAccess(true)
-          .fileAccess(true)
-          .onlineImageAccess(true)
-          .imageAccess(true)
-          .mixedMode(MixedMode.All)
-          .onPageEnd((_event) => {
-            this.avatarPageReady = true
-            this.avatarStatusText = this.sigmlUrl === '' ? '当前资源没有可播放的 SiGML 文件' : '数字人已就绪'
-            void this.syncAvatar(false)
-          })
-          .width('100%')
-          .height(360)
-
-        if (this.sigmlUrl === '') {
-          Text('当前资源没有可播放的 SiGML 文件')
-            .fontSize(16)
-            .fontColor('#475467')
-            .padding(16)
-        }
-      }
-      .width('100%')
-      .height(360)
-      .padding(0)
-      .borderRadius(28)
-      .clip(true)
-      .backgroundColor('#E9EEF9')
-      .border({
-        width: 1,
-        color: 'rgba(148,163,184,0.20)'
-      })
-
-      if (this.avatarErrorText !== '') {
-        Text(this.avatarErrorText)
-          .fontSize(13)
-          .fontColor('#D92D20')
-          .width('100%')
-      }
-    }
-    .width('100%')
-    .padding(20)
-    .backgroundColor('#F7F8FA')
-    .borderRadius(24)
-  }
-
-
-  @Builder
-  private buildCameraOverlay(): void {
-    Stack({ alignContent: Alignment.TopStart }) {
-      XComponent({
-        id: 'gesture-camera-preview',
-        type: XComponentType.SURFACE,
-        controller: this.xComponentController
-      })
-        .onLoad(async () => {
-          await this.handleSurfaceLoaded()
-        })
-        .onDestroy(() => {
-          this.safeStopCamera()
-        })
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#000000')
-
-
-
-      if (this.datasetCountdownText !== '') {
-        Text(this.datasetCountdownText)
-          .fontSize(96)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
-          .backgroundColor('rgba(0,0,0,0.35)')
-          .borderRadius(64)
-          .width(128)
-          .height(128)
-          .textAlign(TextAlign.Center)
-          .align(Alignment.Center)
-      }
-
-
-
-
-      Column() {
-        Column({ space: 10 }) {
-          Row({ space: 12 }) {
-            Text(this.getDisplayName())
-              .fontSize(22)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            Blank()
-
-            Button('关闭')
-              .height(40)
-              .padding({ left: 18, right: 18 })
-              .fontSize(16)
-              .fontColor('#FFFFFF')
-              .backgroundColor('rgba(0,0,0,0.38)')
-              .borderRadius(20)
-              .onClick(async () => {
-                await this.closeCameraOverlay()
-              })
-          }
-          .width('100%')
-
-          Column({ space: 10 }) {
-            Text(`目标动作：${this.getDisplayName()}`)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#FFFFFF')
-
-            Text(`目标编码：${this.getCodeLabel()}`)
-              .fontSize(14)
-              .fontColor('rgba(255,255,255,0.82)')
-
-            Text(`相机状态：${this.cameraStatusText}`)
-              .fontSize(14)
-              .fontColor('rgba(255,255,255,0.82)')
-
-            GestureRecognitionPanel({
-              recognitionStatusText: this.recognitionStatusText,
-              hasRecognitionSucceeded: this.hasRecognitionSucceeded,
-              recognitionModelVersionName: this.recognitionModelVersionName,
-              recognitionUsingPublishedModel: this.recognitionUsingPublishedModel
-            })
-
-            if (this.enableDatasetCollect) {
-              GestureDatasetCollectPanel({
-                datasetStatusText: this.datasetStatusText,
-                datasetValidFrames: this.datasetValidFrames,
-                datasetWindowSize: this.datasetWindowSize
-              })
-            }
-          }
-          .width('100%')
-          .padding(12)
-          .backgroundColor(this.getStatusCardBackgroundColor())
-          .borderRadius(16)
-          .border({
-            width: 1,
-            color: this.getStatusCardBorderColor()
-          })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding({
-          left: 16,
-          right: 16,
-          top: this.getOverlayTopPadding(),
-          bottom: 0
-        })
-
-        Blank()
-
-        Column() {
-          GestureCameraActionPanel({
-            primaryButtonText: this.getPrimaryButtonText(),
-            hasRecognitionSucceeded: this.hasRecognitionSucceeded,
-            enableDatasetCollect: this.enableDatasetCollect,
-            isDatasetCollecting: this.isDatasetCollecting,
-            isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
-            onToggleRecognition: (): void => {
-              if (this.hasRecognitionSucceeded) {
-                void this.startGestureRecognition()
-                return
-              }
-
-              if (this.isRecognizing) {
-                void this.stopGestureRecognition(false)
-              } else {
-                void this.startGestureRecognition()
-              }
-            },
-            onStartDatasetCollect: (): void => {
-              void this.startDatasetCollect()
-            },
-            onStopDatasetCollect: (): void => {
-              void this.stopDatasetCollect()
-            },
-            onConfirmSaveDataset: (): void => {
-              void this.confirmSaveDataset()
-            },
-            onDiscardDataset: (): void => {
-              void this.discardPendingDataset()
-            }
-          })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Center)
-        .padding({
-          left: 16,
-          right: 16,
-          top: 0,
-          bottom: this.getOverlayBottomPadding()
-        })
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.SpaceBetween)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('#000000')
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-  }
 
   build() {
     Stack() {
@@ -1449,7 +823,21 @@ struct GesturePracticePage {
         Scroll() {
           Column({ space: 20 }) {
             this.buildReferenceCard()
-            this.buildAvatarCard()
+            GestureAvatarCard({
+              avatarStatusText: this.avatarStatusText,
+              avatarErrorText: this.avatarErrorText,
+              sigmlUrl: this.sigmlUrl,
+              avatarController: this.avatarPlaybackSession.getController(),
+              onPlay: (): void => {
+                void this.playAvatar()
+              },
+              onReplay: (): void => {
+                void this.replayAvatar()
+              },
+              onPageEnd: (): void => {
+                this.avatarPlaybackSession.handlePageEnd(this.sigmlUrl)
+              }
+            })
 
             Button('打开相机')
               .width('100%')
@@ -1475,7 +863,60 @@ struct GesturePracticePage {
       .backgroundColor('#FFFFFF')
 
       if (this.showCameraOverlay) {
-        this.buildCameraOverlay()
+        GestureCameraOverlay({
+          xComponentController: this.xComponentController,
+          overlayTopPadding: this.getOverlayTopPadding(),
+          overlayBottomPadding: this.getOverlayBottomPadding(),
+          cameraStatusText: this.cameraStatusText,
+          previewStarted: this.previewStarted,
+          datasetCountdownText: this.datasetCountdownText,
+          targetName: this.getDisplayName(),
+          targetCodeLabel: this.getCodeLabel(),
+          recognitionStatusText: this.recognitionStatusText,
+          hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+          recognitionModelVersionName: this.recognitionModelVersionName,
+          recognitionUsingPublishedModel: this.recognitionUsingPublishedModel,
+          enableDatasetCollect: this.enableDatasetCollect,
+          datasetStatusText: this.datasetStatusText,
+          datasetValidFrames: this.datasetValidFrames,
+          datasetWindowSize: this.datasetWindowSize,
+          primaryButtonText: this.getPrimaryButtonText(),
+          isDatasetCollecting: this.isDatasetCollecting,
+          isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
+          onSurfaceLoaded: (): void => {
+            void this.handleSurfaceLoaded()
+          },
+          onSurfaceDestroy: (): void => {
+            void this.safeStopCamera()
+          },
+          onClose: (): void => {
+            void this.closeCameraOverlay()
+          },
+          onToggleRecognition: (): void => {
+            if (this.hasRecognitionSucceeded) {
+              void this.startGestureRecognition()
+              return
+            }
+
+            if (this.isRecognizing) {
+              void this.stopGestureRecognition(false)
+            } else {
+              void this.startGestureRecognition()
+            }
+          },
+          onStartDatasetCollect: (): void => {
+            void this.startDatasetCollect()
+          },
+          onStopDatasetCollect: (): void => {
+            void this.stopDatasetCollect()
+          },
+          onConfirmSaveDataset: (): void => {
+            void this.confirmSaveDataset()
+          },
+          onDiscardDataset: (): void => {
+            void this.discardPendingDataset()
+          }
+        })
       }
     }
     .width('100%')
