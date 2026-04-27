@@ -29,14 +29,6 @@ struct MineSecurityPage {
     }
   }
 
-  private goToPasswordPage(): void {
-    router.pushUrl({
-      url: 'pages/MinePasswordPage'
-    }).catch((err: Object) => {
-      console.error(`跳转修改密码页失败：${JSON.stringify(err)}`)
-    })
-  }
-
   private async handleLogout(): Promise<void> {
     if (this.loggingOut) {
       return
@@ -126,7 +118,7 @@ struct MineSecurityPage {
 
         Column({ space: 10 }) {
           this.buildSecurityRow($r('sys.symbol.lock'), '修改密码', false, () => {
-            this.goToPasswordPage()
+            this.pageTip = '修改密码页面待接入。'
           })
 
           this.buildSecurityRow($r('sys.symbol.power'), this.loggingOut ? '退出中...' : '退出登录', true, () => {
