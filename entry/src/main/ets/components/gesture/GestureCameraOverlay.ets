@@ -85,27 +85,6 @@ export struct GestureCameraOverlay {
   /** 丢弃 raw dataset 样本回调。 */
   onDiscardDataset: () => void = () => {}
 
-  /**
-   * 获取顶部有意义内容保护距离。
-   *
-   * 说明：
-   * 相机预览画面可以铺进系统安全区，但顶部标题、关闭按钮、识别面板不能压进状态栏。
-   * 真机上 avoidArea 可能偏小或临时为 0，因此这里加最小保护值。
-   */
-  private getProtectedTopPadding(): number {
-    return Math.max(this.overlayTopPadding, 56)
-  }
-
-  /**
-   * 获取底部有意义内容保护距离。
-   *
-   * 说明：
-   * 底部操作按钮不能压进手势条 / 导航指示区，因此这里加最小保护值。
-   */
-  private getProtectedBottomPadding(): number {
-    return Math.max(this.overlayBottomPadding, 64)
-  }
-
   @Builder
   private buildCameraPreview(): void {
     Stack({ alignContent: Alignment.Center }) {
@@ -123,15 +102,6 @@ export struct GestureCameraOverlay {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
-
-      if (!this.previewStarted) {
-        Text(this.cameraStatusText)
-          .fontSize(16)
-          .fontColor('#FFFFFF')
-          .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-          .backgroundColor('rgba(0,0,0,0.48)')
-          .borderRadius(18)
-      }
 
       if (this.datasetCountdownText !== '') {
         Text(this.datasetCountdownText)
@@ -166,11 +136,13 @@ export struct GestureCameraOverlay {
 
             Blank()
 
-            Button('关闭')
+            Button() {
+              SymbolGlyph($r('sys.symbol.xmark'))
+                .fontSize(20)
+                .fontColor(['#FFFFFF'])
+            }
+              .width(40)
               .height(40)
-              .padding({ left: 18, right: 18 })
-              .fontSize(16)
-              .fontColor('#FFFFFF')
               .backgroundColor('rgba(0,0,0,0.38)')
               .borderRadius(20)
               .onClick(() => {
@@ -222,7 +194,7 @@ export struct GestureCameraOverlay {
         .padding({
           left: 16,
           right: 16,
-          top: this.getProtectedTopPadding(),
+          top: this.overlayTopPadding,
           bottom: 0
         })
 
@@ -258,7 +230,7 @@ export struct GestureCameraOverlay {
           left: 16,
           right: 16,
           top: 0,
-          bottom: this.getProtectedBottomPadding()
+          bottom: this.overlayBottomPadding
         })
       }
       .width('100%')
