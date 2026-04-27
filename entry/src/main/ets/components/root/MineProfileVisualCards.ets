@@ -1,3 +1,5 @@
+import { router } from '@kit.ArkUI'
+
 const CARD_BG: string = '#FFFFFF'
 const PRIMARY: string = '#1848DE'
 const PRIMARY_SOFT: string = '#EAF1FF'
@@ -170,6 +172,14 @@ export struct MineMenuVisualCard {
   /** 打开关于听桥回调。 */
   onOpenAboutHearBridge: () => void = () => {}
 
+  private pushPage(url: string): void {
+    router.pushUrl({
+      url: url
+    }).catch((err: Object) => {
+      console.error(`跳转页面失败：${JSON.stringify(err)}`)
+    })
+  }
+
   @Builder
   private buildMenuRow(icon: Resource, title: string, onClickAction: () => void): void {
     Row({ space: 12 }) {
@@ -210,10 +220,13 @@ export struct MineMenuVisualCard {
     Column({ space: 10 }) {
       this.buildMenuRow($r('sys.symbol.star'), '我的收藏', this.onOpenFavorites)
       this.buildMenuRow($r('sys.symbol.person'), '账号资料', () => {
-        AppStorage.setOrCreate('mine.currentView', 'profile')
+        this.pushPage('pages/MineProfilePage')
         this.onOpenAccountProfile()
       })
-      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', this.onOpenAccountSecurity)
+      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', () => {
+        this.pushPage('pages/MineSecurityPage')
+        this.onOpenAccountSecurity()
+      })
       this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', this.onOpenHelpFeedback)
       this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', this.onOpenAboutHearBridge)
     }
