@@ -13,6 +13,9 @@ import { GestureWsResultMessage } from '../model/GestureWsModels'
 
 import { DatasetWsApi } from '../api/DatasetWsApi'
 import { DatasetWsStatusMessage } from '../model/DatasetWsModels'
+import { GestureRecognitionPanel } from '../components/gesture/GestureRecognitionPanel'
+import { GestureDatasetCollectPanel } from '../components/gesture/GestureDatasetCollectPanel'
+import { GestureCameraActionPanel } from '../components/gesture/GestureCameraActionPanel'
 
 
 @Entry
@@ -41,6 +44,9 @@ struct GesturePracticePage {
 
   /** 当前实时识别是否使用管理端发布模型。 */
   @State recognitionUsingPublishedModel: boolean = false
+
+  /** 是否启用开发者 raw dataset 采集模式。 */
+  @StorageLink('developer.datasetCollect.enabled') enableDatasetCollect: boolean = false
 
   @State datasetStatusText: string = '可在查看数字人后采集当前动作样本'
   @State isDatasetCollecting: boolean = false
@@ -635,7 +641,7 @@ struct GesturePracticePage {
 
       // 采集链路：发送给 /ws/dataset
       // 注意：这里不 await，避免采集发送阻塞抓帧循环。
-      if (this.isDatasetCollecting) {
+      if (this.enableDatasetCollect && this.isDatasetCollecting) {
         this.enqueueDatasetFrame(jpegBytes)
       }
     } catch (error) {
@@ -671,7 +677,7 @@ struct GesturePracticePage {
       return
     }
 
-    if (!this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
+    if (!this.enableDatasetCollect || !this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
       this.pendingDatasetFrame = null
       return
     }
@@ -692,7 +698,7 @@ struct GesturePracticePage {
   }
 
   private async handleDatasetFrame(jpegBytes: ArrayBuffer): Promise<void> {
-    if (!this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
+    if (!this.enableDatasetCollect || !this.isDatasetCollecting || this.isDatasetWaitingConfirm) {
       return
     }
 
@@ -716,6 +722,11 @@ struct GesturePracticePage {
   }
 
   private async startDatasetCollect(): Promise<void> {
+    if (!this.enableDatasetCollect) {
+      this.datasetStatusText = '开发者采集模式未开启，普通用户不能采集 raw dataset 样本'
+      return
+    }
+
     if (this.isDatasetCollecting) {
       return
     }
@@ -1343,22 +1354,20 @@ struct GesturePracticePage {
               .fontSize(14)
               .fontColor('rgba(255,255,255,0.82)')
 
-            Text(this.recognitionStatusText)
-              .fontSize(15)
-              .lineHeight(22)
-              .fontColor('#FFFFFF')
-            Text(`当前模型：${this.recognitionModelVersionName}${this.recognitionUsingPublishedModel ? '（已发布）' : ''}`)
-              .fontSize(12)
-              .fontColor('rgba(255,255,255,0.72)')
-              .margin({ top: 6 })
-            Text(`采集状态：${this.datasetStatusText}`)
-              .fontSize(14)
-              .lineHeight(20)
-              .fontColor('rgba(255,255,255,0.90)')
+            GestureRecognitionPanel({
+              recognitionStatusText: this.recognitionStatusText,
+              hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+              recognitionModelVersionName: this.recognitionModelVersionName,
+              recognitionUsingPublishedModel: this.recognitionUsingPublishedModel
+            })
 
-            Text(`采集进度：${this.datasetValidFrames}/${this.datasetWindowSize}`)
-              .fontSize(14)
-              .fontColor('rgba(255,255,255,0.82)')
+            if (this.enableDatasetCollect) {
+              GestureDatasetCollectPanel({
+                datasetStatusText: this.datasetStatusText,
+                datasetValidFrames: this.datasetValidFrames,
+                datasetWindowSize: this.datasetWindowSize
+              })
+            }
           }
           .width('100%')
           .padding(12)
@@ -1381,85 +1390,37 @@ struct GesturePracticePage {
         Blank()
 
         Column() {
-          Button(this.getPrimaryButtonText())
-            .width('100%')
-            .height(54)
-            .fontSize(20)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#FFFFFF')
-            .backgroundColor(this.hasRecognitionSucceeded ? 'rgba(34,197,94,0.55)' : 'rgba(255,255,255,0.22)')
-            .borderRadius(27)
-            .onClick(async () => {
+          GestureCameraActionPanel({
+            primaryButtonText: this.getPrimaryButtonText(),
+            hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+            enableDatasetCollect: this.enableDatasetCollect,
+            isDatasetCollecting: this.isDatasetCollecting,
+            isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
+            onToggleRecognition: (): void => {
               if (this.hasRecognitionSucceeded) {
-                await this.startGestureRecognition()
+                void this.startGestureRecognition()
                 return
               }
 
               if (this.isRecognizing) {
-                await this.stopGestureRecognition(false)
+                void this.stopGestureRecognition(false)
               } else {
-                await this.startGestureRecognition()
+                void this.startGestureRecognition()
               }
-            })
-
-          Row({ space: 12 }) {
-            Button(this.isDatasetCollecting ? '采集中' : '采集样本')
-              .layoutWeight(1)
-              .height(48)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#FFFFFF')
-              .backgroundColor(this.isDatasetCollecting ? 'rgba(148,163,184,0.82)' : 'rgba(16,185,129,0.92)')
-              .borderRadius(24)
-              .enabled(!this.isDatasetCollecting && !this.isDatasetWaitingConfirm && !this.isRecognizing)
-              .onClick(async () => {
-                await this.startDatasetCollect()
-              })
-
-            Button('取消采集')
-              .layoutWeight(1)
-              .height(48)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#FFFFFF')
-              .backgroundColor('rgba(239,68,68,0.86)')
-              .borderRadius(24)
-              .enabled(this.isDatasetCollecting || this.isDatasetWaitingConfirm)
-              .onClick(async () => {
-                await this.stopDatasetCollect()
-              })
-          }
-          .width('100%')
-          .margin({ top: 12 })
-          if (this.isDatasetWaitingConfirm) {
-            Row({ space: 12 }) {
-              Button('保存样本')
-                .layoutWeight(1)
-                .height(48)
-                .fontSize(16)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFF')
-                .backgroundColor('rgba(37,99,235,0.92)')
-                .borderRadius(24)
-                .onClick(async () => {
-                  await this.confirmSaveDataset()
-                })
-
-              Button('丢弃样本')
-                .layoutWeight(1)
-                .height(48)
-                .fontSize(16)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFF')
-                .backgroundColor('rgba(107,114,128,0.92)')
-                .borderRadius(24)
-                .onClick(async () => {
-                  await this.discardPendingDataset()
-                })
+            },
+            onStartDatasetCollect: (): void => {
+              void this.startDatasetCollect()
+            },
+            onStopDatasetCollect: (): void => {
+              void this.stopDatasetCollect()
+            },
+            onConfirmSaveDataset: (): void => {
+              void this.confirmSaveDataset()
+            },
+            onDiscardDataset: (): void => {
+              void this.discardPendingDataset()
             }
-            .width('100%')
-            .margin({ top: 12 })
-          }
+          })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
