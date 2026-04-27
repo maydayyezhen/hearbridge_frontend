@@ -32,7 +32,7 @@ struct MineProfilePage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FBFF')
+    .backgroundColor('#FFFFFF')
     .scrollBar(BarState.Off)
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
