@@ -6,7 +6,9 @@ import { GestureListPageParams, GesturePracticePageParams } from '../model/Gestu
 const TEXT_MAIN: string = '#11233C'
 const SECONDARY_TEXT: string = '#6B7A90'
 const SURFACE: string = '#FFFFFF'
-const CARD_BG: string = '#F7F8FA'
+const PRIMARY: string = '#2D6CDF'
+const BORDER: string = '#E5EAF3'
+const SOFT_BG: string = '#EAF1FF'
 
 @Entry
 @Component
@@ -86,6 +88,11 @@ struct GestureListPage {
     }
   }
 
+  private getFallbackText(item: GestureItemDto): string {
+    const source = item.nameZh.trim().length > 0 ? item.nameZh : item.code
+    return source.length > 0 ? source.slice(0, 1).toUpperCase() : '练'
+  }
+
   @Builder
   private buildTopBar(): void {
     Row({ space: 12 }) {
@@ -119,87 +126,97 @@ struct GestureListPage {
   private buildCover(item: GestureItemDto): void {
     if (item.coverUrl !== '') {
       Image(item.coverUrl)
-        .width(72)
-        .height(72)
-        .borderRadius(12)
+        .width(42)
+        .height(42)
+        .borderRadius(14)
         .objectFit(ImageFit.Cover)
-        .backgroundColor('#EDEFF2')
+        .backgroundColor(SOFT_BG)
     } else {
       Stack({ alignContent: Alignment.Center }) {
-        Text(item.code)
-          .fontSize(12)
-          .fontColor('#666666')
+        Text(this.getFallbackText(item))
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(PRIMARY)
           .textAlign(TextAlign.Center)
       }
-      .width(72)
-      .height(72)
-      .borderRadius(12)
-      .backgroundColor('#EDEFF2')
+      .width(42)
+      .height(42)
+      .borderRadius(14)
+      .backgroundColor(SOFT_BG)
     }
   }
 
   @Builder
+  private buildDivider(): void {
+    Row()
+      .width('100%')
+      .height(1)
+      .backgroundColor(BORDER)
+  }
+
+  @Builder
   private buildGestureItem(item: GestureItemDto): void {
-    Row({ space: 14 }) {
-      this.buildCover(item)
+    Column() {
+      Row({ space: 14 }) {
+        this.buildCover(item)
 
-      Column({ space: 6 }) {
-        Text(item.nameZh === '' ? item.code : item.nameZh)
-          .fontSize(22)
-          .fontWeight(FontWeight.Medium)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column({ space: 4 }) {
+          Text(item.nameZh === '' ? item.code : item.nameZh)
+            .fontSize(17)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Text(`编码：${item.code}`)
-          .fontSize(14)
-          .fontColor('#888888')
+          Text(`${item.code} · ${item.categoryCode}`)
+            .fontSize(12)
+            .fontColor(SECONDARY_TEXT)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
 
-        Text(`分类：${item.categoryCode}`)
+        Text('练习')
           .fontSize(13)
-          .fontColor('#AAAAAA')
+          .fontColor(PRIMARY)
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
+      .width('100%')
+      .padding({ top: 13, bottom: 13 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.goToPractice(item)
+      })
 
-      Text('练习')
-        .fontSize(16)
-        .fontColor('#3F7BFF')
+      this.buildDivider()
     }
     .width('100%')
-    .padding(16)
-    .backgroundColor(CARD_BG)
-    .borderRadius(16)
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      this.goToPractice(item)
-    })
+    .backgroundColor(SURFACE)
   }
 
   @Builder
   private buildStateContent(title: string, description: string, isError: boolean = false): void {
     Column({ space: 8 }) {
       Text(title)
-        .fontSize(18)
-        .fontColor(isError ? Color.Red : '#666666')
+        .fontSize(17)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(isError ? Color.Red : TEXT_MAIN)
 
       if (description.trim().length > 0) {
         Text(description)
-          .fontSize(14)
-          .fontColor('#999999')
+          .fontSize(13)
+          .fontColor(SECONDARY_TEXT)
       }
     }
     .width('100%')
-    .height('100%')
-    .padding({ left: 0, right: 0, top: 0, bottom: 0 })
-    .alignItems(HorizontalAlign.Start)
+    .padding({ top: 32, bottom: 32 })
+    .alignItems(HorizontalAlign.Center)
     .justifyContent(FlexAlign.Start)
   }
 
   @Builder
   private buildListContent(): void {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: 0 }) {
         ForEach(
           this.gestureList,
           (item: GestureItemDto) => {
