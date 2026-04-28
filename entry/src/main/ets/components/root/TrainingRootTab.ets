@@ -10,6 +10,7 @@ const TEXT_MAIN: string = '#111827'
 const TEXT_SUB: string = '#667085'
 const BORDER: string = '#E5EAF3'
 const ICON_MUTED: string = '#9AACBF'
+const PAGE_SIZE: number = 20
 
 /**
  * 训练中心根 Tab。
@@ -22,25 +23,53 @@ const ICON_MUTED: string = '#9AACBF'
  */
 @Component
 export struct TrainingRootTab {
-  /** 当前可用训练分类。 */
+  /** 当前可用训练分类，作为首页预加载兜底数据。 */
   @Prop categories: CategoryDto[] = []
-  /** 分类加载状态。 */
+  /** 分类加载状态，作为首页预加载兜底状态。 */
   @Prop loading: boolean = false
-  /** 分类加载错误文案。 */
+  /** 分类加载错误文案，作为首页预加载兜底错误。 */
   @Prop errorText: string = ''
 
   /** 搜索框当前输入内容。 */
   @State keywordInput: string = ''
   /** 已提交的搜索关键词。 */
   @State submittedKeyword: string = ''
+
+  /** 默认分类分页列表。 */
+  @State pagedCategories: CategoryDto[] = []
+  /** 默认分类当前页。 */
+  @State categoryPageNo: number = 1
+  /** 默认分类总数。 */
+  @State categoryTotal: number = 0
+  /** 默认分类是否还有下一页。 */
+  @State categoryHasNext: boolean = false
+  /** 默认分类是否正在加载。 */
+  @State categoryPageLoading: boolean = false
+  /** 默认分类分页错误。 */
+  @State categoryPageErrorText: string = ''
+
   /** 搜索中的分类结果。 */
   @State searchedCategories: CategoryDto[] = []
   /** 搜索中的手势资源结果。 */
   @State searchedResources: GestureItemDto[] = []
+  /** 搜索当前页。 */
+  @State searchPageNo: number = 1
+  /** 搜索分类总数。 */
+  @State searchedCategoryTotal: number = 0
+  /** 搜索资源总数。 */
+  @State searchedResourceTotal: number = 0
+  /** 搜索是否还有下一页。 */
+  @State searchHasNext: boolean = false
   /** 是否正在搜索。 */
   @State searching: boolean = false
   /** 搜索错误文案。 */
   @State searchErrorText: string = ''
+
+  aboutToAppear(): void {
+    if (this.pagedCategories.length === 0 && !this.categoryPageLoading) {
+      void this.loadCategoryPage(true)
+    }
+  }
 
   /** 获取已提交搜索关键词。 */
   private getKeyword(): string {
@@ -63,6 +92,10 @@ export struct TrainingRootTab {
     this.submittedKeyword = ''
     this.searchedCategories = []
     this.searchedResources = []
+    this.searchedCategoryTotal = 0
+    this.searchedResourceTotal = 0
+    this.searchPageNo = 1
+    this.searchHasNext = false
     this.searchErrorText = ''
     this.searching = false
   }
@@ -71,31 +104,70 @@ export struct TrainingRootTab {
   private submitSearch(): void {
     const keyword = this.keywordInput.trim()
     this.submittedKeyword = keyword
+    this.searchedCategories = []
+    this.searchedResources = []
+    this.searchedCategoryTotal = 0
+    this.searchedResourceTotal = 0
+    this.searchPageNo = 1
+    this.searchHasNext = false
+    this.searchErrorText = ''
+
     if (keyword.length === 0) {
-      this.searchedCategories = []
-      this.searchedResources = []
-      this.searchErrorText = ''
       return
     }
-    void this.loadSearchResult(keyword)
+    void this.loadSearchResult(keyword, true)
+  }
+
+  /** 加载默认分类分页。 */
+  private async loadCategoryPage(reset: boolean): Promise<void> {
+    if (this.categoryPageLoading) {
+      return
+    }
+
+    const nextPageNo = reset ? 1 : this.categoryPageNo + 1
+    this.categoryPageLoading = true
+    this.categoryPageErrorText = ''
+
+    try {
+      const page = await GestureApi.getCategoriesPage(nextPageNo, PAGE_SIZE)
+      this.pagedCategories = reset ? page.records : this.pagedCategories.concat(page.records)
+      this.categoryPageNo = page.pageNo
+      this.categoryTotal = page.total
+      this.categoryHasNext = page.hasNext
+    } catch (err) {
+      this.categoryPageErrorText = `分类加载失败：${JSON.stringify(err)}`
+    } finally {
+      this.categoryPageLoading = false
+    }
   }
 
   /** 加载真实搜索结果。 */
-  private async loadSearchResult(keyword: string): Promise<void> {
+  private async loadSearchResult(keyword: string, reset: boolean): Promise<void> {
     if (this.searching) {
       return
     }
 
+    const nextPageNo = reset ? 1 : this.searchPageNo + 1
     this.searching = true
     this.searchErrorText = ''
 
     try {
-      const result = await GestureApi.search(keyword)
-      this.searchedCategories = result.categories
-      this.searchedResources = result.resources
+      const result = await GestureApi.search(keyword, nextPageNo, PAGE_SIZE)
+      this.searchedCategories = reset
+        ? result.categories.records
+        : this.searchedCategories.concat(result.categories.records)
+      this.searchedResources = reset
+        ? result.resources.records
+        : this.searchedResources.concat(result.resources.records)
+      this.searchPageNo = nextPageNo
+      this.searchedCategoryTotal = result.categories.total
+      this.searchedResourceTotal = result.resources.total
+      this.searchHasNext = result.categories.hasNext || result.resources.hasNext
     } catch (err) {
-      this.searchedCategories = []
-      this.searchedResources = []
+      if (reset) {
+        this.searchedCategories = []
+        this.searchedResources = []
+      }
       this.searchErrorText = `搜索失败：${JSON.stringify(err)}`
     } finally {
       this.searching = false
@@ -104,7 +176,18 @@ export struct TrainingRootTab {
 
   /** 获取未搜索时展示的分类列表。 */
   private getDefaultCategories(): CategoryDto[] {
+    if (this.pagedCategories.length > 0 || this.categoryPageLoading || this.categoryPageErrorText.length > 0) {
+      return this.pagedCategories
+    }
     return this.categories
+  }
+
+  /** 获取默认分类总数。 */
+  private getDefaultCategoryTotal(): number {
+    if (this.categoryTotal > 0) {
+      return this.categoryTotal
+    }
+    return this.categories.length
   }
 
   /** 打开分类资源列表页。 */
@@ -239,6 +322,20 @@ export struct TrainingRootTab {
       .backgroundColor(BORDER)
   }
 
+  /** 构建加载更多行。 */
+  @Builder
+  private buildLoadMoreRow(text: string, onLoadMore: () => void): void {
+    Text(text)
+      .width('100%')
+      .fontSize(13)
+      .fontColor(PRIMARY)
+      .textAlign(TextAlign.Center)
+      .padding({ top: 16, bottom: 16 })
+      .onClick(() => {
+        onLoadMore()
+      })
+  }
+
   /** 构建分类结果行。 */
   @Builder
   private buildCategoryResultCard(item: CategoryDto): void {
@@ -370,15 +467,19 @@ export struct TrainingRootTab {
   /** 构建未搜索时的默认内容。 */
   @Builder
   private buildDefaultResults(): void {
-    if (this.loading) {
+    if (this.categoryPageLoading && this.getDefaultCategories().length === 0) {
       this.buildStateCard('正在加载训练分类', '稍等一下，我们正在同步当前训练资源。')
-    } else if (this.errorText.trim().length > 0) {
+    } else if (this.categoryPageErrorText.trim().length > 0) {
+      this.buildStateCard('训练分类加载失败', this.categoryPageErrorText)
+    } else if (this.loading && this.getDefaultCategories().length === 0) {
+      this.buildStateCard('正在加载训练分类', '稍等一下，我们正在同步当前训练资源。')
+    } else if (this.errorText.trim().length > 0 && this.getDefaultCategories().length === 0) {
       this.buildStateCard('训练分类加载失败', this.errorText)
     } else if (this.getDefaultCategories().length === 0) {
       this.buildStateCard('暂无训练分类', '当前还没有可用训练分类。')
     } else {
       Column({ space: 0 }) {
-        this.buildSectionTitle('全部分类', this.getDefaultCategories().length)
+        this.buildSectionTitle('全部分类', this.getDefaultCategoryTotal())
 
         ForEach(
           this.getDefaultCategories(),
@@ -387,6 +488,12 @@ export struct TrainingRootTab {
           },
           (item: CategoryDto) => item.id.toString()
         )
+
+        if (this.categoryHasNext) {
+          this.buildLoadMoreRow(this.categoryPageLoading ? '加载中...' : '加载更多分类', () => {
+            void this.loadCategoryPage(false)
+          })
+        }
       }
       .width('100%')
     }
@@ -395,7 +502,7 @@ export struct TrainingRootTab {
   /** 构建真实搜索结果。 */
   @Builder
   private buildSubmittedSearchResults(): void {
-    if (this.searching) {
+    if (this.searching && this.searchedResources.length === 0 && this.searchedCategories.length === 0) {
       this.buildStateCard('正在搜索', '正在查找匹配的手势和分类。')
     } else if (this.searchErrorText.trim().length > 0) {
       this.buildStateCard('搜索失败', this.searchErrorText)
@@ -405,7 +512,7 @@ export struct TrainingRootTab {
       Column({ space: 18 }) {
         if (this.searchedResources.length > 0) {
           Column({ space: 0 }) {
-            this.buildSectionTitle('手势资源', this.searchedResources.length)
+            this.buildSectionTitle('手势资源', this.searchedResourceTotal)
             ForEach(
               this.searchedResources,
               (item: GestureItemDto) => {
@@ -419,7 +526,7 @@ export struct TrainingRootTab {
 
         if (this.searchedCategories.length > 0) {
           Column({ space: 0 }) {
-            this.buildSectionTitle('相关分类', this.searchedCategories.length)
+            this.buildSectionTitle('相关分类', this.searchedCategoryTotal)
             ForEach(
               this.searchedCategories,
               (item: CategoryDto) => {
@@ -429,6 +536,12 @@ export struct TrainingRootTab {
             )
           }
           .width('100%')
+        }
+
+        if (this.searchHasNext) {
+          this.buildLoadMoreRow(this.searching ? '加载中...' : '加载更多结果', () => {
+            void this.loadSearchResult(this.submittedKeyword, false)
+          })
         }
       }
       .width('100%')
