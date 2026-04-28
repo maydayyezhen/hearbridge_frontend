@@ -4,6 +4,10 @@ import { MineRootTab } from './MineRootTab'
 import { GesturePracticePageParams } from '../../model/GestureModels'
 
 const PAGE_BG: string = '#FFFFFF'
+const PRIMARY: string = '#2D6CDF'
+const PRIMARY_SOFT: string = '#EAF1FF'
+const TEXT_MAIN: string = '#111827'
+const BORDER: string = '#E5EAF3'
 
 /**
  * 我的页正式版容器。
@@ -44,6 +48,8 @@ export struct MineRootTabClean {
 
   /** 最近练习封面地址。 */
   @StorageLink('recent.practice.coverUrl') recentPracticeCoverUrl: string = ''
+  /** 是否启用开发者 raw dataset 采集模式。 */
+  @StorageLink('developer.datasetCollect.enabled') enableDatasetCollect: boolean = false
 
   /** 获取展示名称。 */
   private getDisplayName(): string {
@@ -108,6 +114,47 @@ export struct MineRootTabClean {
     }
   }
 
+  /** 构建采集开关区域。 */
+  @Builder
+  private buildDatasetCollectSwitch(): void {
+    Column({ space: 0 }) {
+      Row({ space: 14 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.camera'))
+            .fontSize(18)
+            .fontColor([PRIMARY])
+        }
+        .width(40)
+        .height(40)
+        .borderRadius(14)
+        .backgroundColor(PRIMARY_SOFT)
+
+        Text('采集模式')
+          .layoutWeight(1)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(TEXT_MAIN)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.enableDatasetCollect })
+          .selectedColor(PRIMARY)
+          .onChange((isOn: boolean): void => {
+            this.enableDatasetCollect = isOn
+          })
+      }
+      .width('100%')
+      .padding({ top: 16, bottom: 16 })
+      .alignItems(VerticalAlign.Center)
+
+      Row()
+        .width('100%')
+        .height(1)
+        .backgroundColor(BORDER)
+        .margin({ left: 54 })
+    }
+    .width('100%')
+    .backgroundColor(PAGE_BG)
+  }
+
   /** 构建正式我的页主内容。 */
   @Builder
   private buildMainContent(): void {
@@ -137,6 +184,11 @@ export struct MineRootTabClean {
         onOpenHelpFeedback: (): void => {},
         onOpenAboutHearBridge: (): void => {}
       })
+      Row()
+        .width('100%')
+        .height(12)
+
+      this.buildDatasetCollectSwitch()
     }
     .width('100%')
   }

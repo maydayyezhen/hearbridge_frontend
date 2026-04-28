@@ -2,6 +2,15 @@ import { GestureRecognitionPanel } from './GestureRecognitionPanel'
 import { GestureDatasetCollectPanel } from './GestureDatasetCollectPanel'
 import { GestureCameraActionPanel } from './GestureCameraActionPanel'
 
+/**
+ * 手语训练相机全屏 Overlay。
+ *
+ * 说明：
+ * 1. 保持相机画面为主体。
+ * 2. 顶部只保留目标动作、编码和关闭按钮。
+ * 3. 识别状态采用轻量 HUD 浮层。
+ * 4. 底部只保留操作按钮。
+ */
 @Component
 export struct GestureCameraOverlay {
   /** XComponent 控制器，由页面持有并传入，避免组件内部接管相机生命周期。 */
@@ -85,6 +94,9 @@ export struct GestureCameraOverlay {
   /** 丢弃 raw dataset 样本回调。 */
   onDiscardDataset: () => void = () => {}
 
+  /**
+   * 构建相机预览。
+   */
   @Builder
   private buildCameraPreview(): void {
     Stack({ alignContent: Alignment.Center }) {
@@ -103,21 +115,132 @@ export struct GestureCameraOverlay {
         .height('100%')
         .backgroundColor('#000000')
 
+      if (!this.previewStarted && this.cameraStatusText.trim().length > 0) {
+        Text(this.cameraStatusText)
+          .fontSize(14)
+          .fontColor('rgba(255,255,255,0.72)')
+      }
+
       if (this.datasetCountdownText !== '') {
         Text(this.datasetCountdownText)
-          .fontSize(96)
+          .fontSize(88)
           .fontWeight(FontWeight.Bold)
           .fontColor('#FFFFFF')
-          .backgroundColor('rgba(0,0,0,0.35)')
-          .borderRadius(64)
-          .width(128)
-          .height(128)
+          .width(124)
+          .height(124)
           .textAlign(TextAlign.Center)
           .align(Alignment.Center)
+          .backgroundColor('rgba(0,0,0,0.28)')
+          .borderRadius(62)
       }
     }
     .width('100%')
     .height('100%')
+  }
+
+  /**
+   * 构建顶部 HUD。
+   */
+  @Builder
+  private buildTopHud(): void {
+    Column({ space: 10 }) {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text(this.targetName)
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          if (this.targetCodeLabel.trim().length > 0) {
+            Text(this.targetCodeLabel)
+              .fontSize(12)
+              .fontColor('rgba(255,255,255,0.72)')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Button() {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(20)
+            .fontColor(['#FFFFFF'])
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor('rgba(0,0,0,0.30)')
+        .borderRadius(20)
+        .stateEffect(false)
+        .onClick(() => {
+          this.onClose()
+        })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      GestureRecognitionPanel({
+        recognitionStatusText: this.recognitionStatusText,
+        hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+        recognitionModelVersionName: this.recognitionModelVersionName,
+        recognitionUsingPublishedModel: this.recognitionUsingPublishedModel
+      })
+
+      if (this.enableDatasetCollect) {
+        GestureDatasetCollectPanel({
+          datasetStatusText: this.datasetStatusText,
+          datasetValidFrames: this.datasetValidFrames,
+          datasetWindowSize: this.datasetWindowSize
+        })
+      }
+    }
+    .width('100%')
+    .padding({
+      left: 16,
+      right: 16,
+      top: this.overlayTopPadding,
+      bottom: 0
+    })
+  }
+
+  /**
+   * 构建底部操作区。
+   */
+  @Builder
+  private buildBottomActions(): void {
+    Column() {
+      GestureCameraActionPanel({
+        primaryButtonText: this.primaryButtonText,
+        hasRecognitionSucceeded: this.hasRecognitionSucceeded,
+        enableDatasetCollect: this.enableDatasetCollect,
+        isDatasetCollecting: this.isDatasetCollecting,
+        isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
+        onToggleRecognition: (): void => {
+          this.onToggleRecognition()
+        },
+        onStartDatasetCollect: (): void => {
+          this.onStartDatasetCollect()
+        },
+        onStopDatasetCollect: (): void => {
+          this.onStopDatasetCollect()
+        },
+        onConfirmSaveDataset: (): void => {
+          this.onConfirmSaveDataset()
+        },
+        onDiscardDataset: (): void => {
+          this.onDiscardDataset()
+        }
+      })
+    }
+    .width('100%')
+    .padding({
+      left: 16,
+      right: 16,
+      top: 0,
+      bottom: this.overlayBottomPadding
+    })
   }
 
   build() {
@@ -125,113 +248,11 @@ export struct GestureCameraOverlay {
       this.buildCameraPreview()
 
       Column() {
-        Column({ space: 10 }) {
-          Row({ space: 12 }) {
-            Text(this.targetName)
-              .fontSize(22)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            Blank()
-
-            Button() {
-              SymbolGlyph($r('sys.symbol.xmark'))
-                .fontSize(20)
-                .fontColor(['#FFFFFF'])
-            }
-              .width(40)
-              .height(40)
-              .backgroundColor('rgba(0,0,0,0.38)')
-              .borderRadius(20)
-              .onClick(() => {
-                this.onClose()
-              })
-          }
-          .width('100%')
-
-          Column({ space: 10 }) {
-            Text(`目标动作：${this.targetName}`)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#FFFFFF')
-
-            Text(`目标编码：${this.targetCodeLabel}`)
-              .fontSize(14)
-              .fontColor('rgba(255,255,255,0.82)')
-
-            Text(`相机状态：${this.cameraStatusText}`)
-              .fontSize(14)
-              .fontColor('rgba(255,255,255,0.82)')
-
-            GestureRecognitionPanel({
-              recognitionStatusText: this.recognitionStatusText,
-              hasRecognitionSucceeded: this.hasRecognitionSucceeded,
-              recognitionModelVersionName: this.recognitionModelVersionName,
-              recognitionUsingPublishedModel: this.recognitionUsingPublishedModel
-            })
-
-            if (this.enableDatasetCollect) {
-              GestureDatasetCollectPanel({
-                datasetStatusText: this.datasetStatusText,
-                datasetValidFrames: this.datasetValidFrames,
-                datasetWindowSize: this.datasetWindowSize
-              })
-            }
-          }
-          .width('100%')
-          .padding(12)
-          .backgroundColor(this.hasRecognitionSucceeded ? 'rgba(34,197,94,0.34)' : 'rgba(0,0,0,0.28)')
-          .borderRadius(16)
-          .border({
-            width: 1,
-            color: this.hasRecognitionSucceeded ? 'rgba(134,239,172,0.82)' : 'rgba(255,255,255,0.14)'
-          })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding({
-          left: 16,
-          right: 16,
-          top: this.overlayTopPadding,
-          bottom: 0
-        })
+        this.buildTopHud()
 
         Blank()
 
-        Column() {
-          GestureCameraActionPanel({
-            primaryButtonText: this.primaryButtonText,
-            hasRecognitionSucceeded: this.hasRecognitionSucceeded,
-            enableDatasetCollect: this.enableDatasetCollect,
-            isDatasetCollecting: this.isDatasetCollecting,
-            isDatasetWaitingConfirm: this.isDatasetWaitingConfirm,
-            onToggleRecognition: (): void => {
-              this.onToggleRecognition()
-            },
-            onStartDatasetCollect: (): void => {
-              this.onStartDatasetCollect()
-            },
-            onStopDatasetCollect: (): void => {
-              this.onStopDatasetCollect()
-            },
-            onConfirmSaveDataset: (): void => {
-              this.onConfirmSaveDataset()
-            },
-            onDiscardDataset: (): void => {
-              this.onDiscardDataset()
-            }
-          })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Center)
-        .padding({
-          left: 16,
-          right: 16,
-          top: 0,
-          bottom: this.overlayBottomPadding
-        })
+        this.buildBottomActions()
       }
       .width('100%')
       .height('100%')

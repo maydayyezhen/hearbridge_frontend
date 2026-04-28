@@ -12,70 +12,56 @@ export struct GestureRecognitionPanel {
   /** 当前是否使用管理端发布模型。 */
   @Prop recognitionUsingPublishedModel: boolean = false
 
-  /** 获取识别状态卡片背景色。 */
-  private getStatusCardBackgroundColor(): string {
-    if (this.hasRecognitionSucceeded) {
-      return 'rgba(34,197,94,0.34)'
-    }
-    return 'rgba(0,0,0,0.28)'
-  }
-
-  /** 获取识别状态卡片边框色。 */
-  private getStatusCardBorderColor(): string {
-    if (this.hasRecognitionSucceeded) {
-      return 'rgba(134,239,172,0.82)'
-    }
-    return 'rgba(255,255,255,0.14)'
+  /** 获取状态色。 */
+  private getAccentColor(): string {
+    return this.hasRecognitionSucceeded ? '#22C55E' : '#FFFFFF'
   }
 
   build() {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       Row({ space: 10 }) {
         Text(this.recognitionStatusText)
           .layoutWeight(1)
-          .fontSize(16)
+          .fontSize(15)
           .fontWeight(FontWeight.Medium)
           .fontColor('#FFFFFF')
-          .lineHeight(22)
+          .lineHeight(20)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         if (this.hasRecognitionSucceeded) {
           Text('完成')
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#16A34A')
-            .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#14532D')
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
             .backgroundColor('#DCFCE7')
-            .borderRadius(14)
+            .borderRadius(12)
         }
       }
       .width('100%')
-      .padding(14)
-      .backgroundColor(this.getStatusCardBackgroundColor())
-      .borderRadius(20)
-      .border({ width: 1, color: this.getStatusCardBorderColor() })
+      .alignItems(VerticalAlign.Center)
 
-      Column({ space: 4 }) {
-        Text('当前识别模型')
-          .fontSize(12)
-          .fontColor('rgba(255,255,255,0.66)')
+      if (this.recognitionModelVersionName.trim().length > 0) {
+        Row({ space: 6 }) {
+          Text('模型')
+            .fontSize(11)
+            .fontColor('rgba(255,255,255,0.62)')
 
-        Text(this.recognitionModelVersionName)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Text(this.recognitionUsingPublishedModel ? '来自管理端发布版本' : '未确认发布状态')
-          .fontSize(11)
-          .fontColor(this.recognitionUsingPublishedModel ? '#BBF7D0' : 'rgba(255,255,255,0.58)')
+          Text(this.recognitionModelVersionName)
+            .layoutWeight(1)
+            .fontSize(12)
+            .fontColor('rgba(255,255,255,0.82)')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .width('100%')
       }
-      .width('100%')
-      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-      .backgroundColor('rgba(0,0,0,0.24)')
-      .borderRadius(16)
-      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    .backgroundColor(this.hasRecognitionSucceeded ? 'rgba(22,163,74,0.30)' : 'rgba(0,0,0,0.34)')
+    .borderRadius(18)
+    .border({ width: 1, color: this.hasRecognitionSucceeded ? 'rgba(187,247,208,0.72)' : 'rgba(255,255,255,0.16)' })
   }
 }

@@ -1,10 +1,19 @@
 import { webview } from '@kit.ArkWeb'
 
+const CARD_BG: string = '#FFFFFF'
+const PRIMARY: string = '#2D6CDF'
+const TEXT_MAIN: string = '#111827'
+const TEXT_SUB: string = '#667085'
+const BORDER: string = '#E5EAF3'
+const AVATAR_BG: string = '#F7FAFE'
+
 /**
  * 数字人示范卡片。
  *
- * 只负责展示数字人 WebView、播放入口、状态与错误信息。
- * 数字人播放逻辑由 GestureAvatarPlaybackService 管理。
+ * 说明：
+ * 1. 只负责展示数字人 WebView、播放入口、状态与错误信息。
+ * 2. 数字人播放逻辑由 GestureAvatarPlaybackService 管理。
+ * 3. 视觉风格统一为白底线性风格，减少旧卡片堆叠感。
  */
 @Component
 export struct GestureAvatarCard {
@@ -19,10 +28,6 @@ export struct GestureAvatarCard {
 
   /**
    * 数字人视窗高度。
-   *
-   * 说明：
-   * 当前手语训练页希望尽量保持单屏不可滚动，
-   * 所以默认高度采用适中的紧凑值；如后续有独立大屏预览页，可由父组件显式传入更大高度。
    */
   @Prop avatarViewportHeight: number = 310
 
@@ -41,29 +46,42 @@ export struct GestureAvatarCard {
   /** Web 页面加载完成回调。 */
   onPageEnd: () => void = () => {}
 
+  /**
+   * 构建线性分割线。
+   */
+  @Builder
+  private buildDivider(): void {
+    Row()
+      .width('100%')
+      .height(1)
+      .backgroundColor(BORDER)
+  }
+
   build() {
-    Column({ space: this.compact ? 10 : 18 }) {
-      Row({ space: 10 }) {
+    Column({ space: 0 }) {
+      Row({ space: 12 }) {
         Text('数字人演示')
           .layoutWeight(1)
-          .fontSize(this.compact ? 18 : 22)
+          .fontSize(15)
           .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
 
-        Button() {
-          SymbolGlyph($r('sys.symbol.play_fill'))
-            .fontSize(this.compact ? 18 : 22)
-            .fontColor(['#FFFFFF'])
-        }
-        .width(this.compact ? 36 : 42)
-        .height(this.compact ? 36 : 42)
-        .backgroundColor('#2D6CDF')
-        .borderRadius(this.compact ? 18 : 21)
-        .stateEffect(true)
-        .onClick(() => {
-          this.onPlay()
-        })
+        Button('播放')
+          .height(34)
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY)
+          .backgroundColor('#F7FAFE')
+          .borderRadius(17)
+          .border({ width: 1, color: BORDER })
+          .padding({ left: 16, right: 16 })
+          .stateEffect(true)
+          .onClick(() => {
+            this.onPlay()
+          })
       }
       .width('100%')
+      .padding({ top: 8, bottom: 12 })
       .alignItems(VerticalAlign.Center)
 
       Stack({ alignContent: Alignment.Center }) {
@@ -84,33 +102,34 @@ export struct GestureAvatarCard {
           .height(this.avatarViewportHeight)
 
         if (this.sigmlUrl === '') {
-          Text('当前资源没有可播放的 SiGML 文件')
-            .fontSize(16)
-            .fontColor('#475467')
+          Text('暂无数字人资源')
+            .fontSize(15)
+            .fontColor(TEXT_SUB)
             .padding(16)
         }
       }
       .width('100%')
       .height(this.avatarViewportHeight)
-      .padding(0)
-      .borderRadius(this.compact ? 20 : 28)
+      .borderRadius(18)
       .clip(true)
-      .backgroundColor('#E9EEF9')
-      .border({
-        width: 1,
-        color: 'rgba(148,163,184,0.20)'
-      })
+      .backgroundColor(AVATAR_BG)
+      .border({ width: 1, color: BORDER })
 
       if (this.avatarErrorText !== '') {
         Text(this.avatarErrorText)
-          .fontSize(13)
-          .fontColor('#D92D20')
+          .fontSize(12)
+          .fontColor('#E5484D')
           .width('100%')
+          .padding({ top: 10 })
       }
+
+      Row()
+        .width('100%')
+        .height(14)
+
+      this.buildDivider()
     }
     .width('100%')
-    .padding(this.compact ? 14 : 20)
-    .backgroundColor('#F7F8FA')
-    .borderRadius(this.compact ? 20 : 24)
+    .backgroundColor(CARD_BG)
   }
 }

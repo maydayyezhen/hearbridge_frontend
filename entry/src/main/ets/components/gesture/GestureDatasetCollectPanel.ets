@@ -13,20 +13,20 @@ export struct GestureDatasetCollectPanel {
     Row({ space: 10 }) {
       Text(this.datasetStatusText)
         .layoutWeight(1)
-        .fontSize(13)
-        .fontColor('rgba(255,255,255,0.84)')
-        .lineHeight(18)
+        .fontSize(12)
+        .fontColor('rgba(255,255,255,0.82)')
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
 
       Text(`${this.datasetValidFrames}/${this.datasetWindowSize}`)
         .fontSize(12)
+        .fontWeight(FontWeight.Medium)
         .fontColor('#FFFFFF')
-        .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-        .backgroundColor('rgba(255,255,255,0.16)')
-        .borderRadius(14)
     }
     .width('100%')
-    .padding(12)
-    .backgroundColor('rgba(0,0,0,0.22)')
-    .borderRadius(18)
+    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+    .backgroundColor('rgba(0,0,0,0.30)')
+    .borderRadius(16)
+    .border({ width: 1, color: 'rgba(255,255,255,0.14)' })
   }
 }

@@ -21,10 +21,13 @@ import {
   GestureAvatarPlaybackState
 } from '../service/gesture/GestureAvatarPlaybackService'
 
-const TEXT_MAIN: string = '#11233C'
+const TEXT_MAIN: string = '#111827'
+const TEXT_SUB: string = '#667085'
 const SECONDARY_TEXT: string = '#6B7A90'
 const SURFACE: string = '#FFFFFF'
-const CARD_BG: string = '#F7F8FA'
+const PRIMARY: string = '#2D6CDF'
+const PRIMARY_SOFT: string = '#EAF1FF'
+const BORDER: string = '#E5EAF3'
 
 /**
  * 手语训练页面重构版。
@@ -561,16 +564,16 @@ struct GesturePracticePageRefactored {
   /** 页面顶部栏。 */
   @Builder
   private buildTopBar(): void {
-    Row({ space: 12 }) {
+    Row({ space: 10 }) {
       Button() {
         SymbolGlyph($r('sys.symbol.chevron_backward'))
           .fontSize(22)
           .fontColor([SECONDARY_TEXT])
       }
-      .width(40)
-      .height(40)
-      .borderRadius(14)
-      .backgroundColor(SURFACE)
+      .width(36)
+      .height(36)
+      .borderRadius(18)
+      .backgroundColor(Color.Transparent)
       .stateEffect(false)
       .onClick(() => {
         this.goBack()
@@ -584,59 +587,73 @@ struct GesturePracticePageRefactored {
       Blank()
     }
     .width('100%')
+    .padding({ top: 2, bottom: 8 })
   }
 
-  /** 目标手势信息卡片。 */
+  /** 目标手势信息区域。 */
   @Builder
   private buildReferenceCard(): void {
-    Row({ space: 16 }) {
-      if (this.coverUrl !== '') {
-        Image(this.coverUrl)
-          .width(120)
-          .height(120)
+    Column({ space: 0 }) {
+      Row({ space: 14 }) {
+        if (this.coverUrl !== '') {
+          Image(this.coverUrl)
+            .width(56)
+            .height(56)
+            .borderRadius(16)
+            .objectFit(ImageFit.Cover)
+            .backgroundColor(PRIMARY_SOFT)
+        } else {
+          Stack({ alignContent: Alignment.Center }) {
+            Text(this.resourceCode === '' ? '练' : this.resourceCode.slice(0, 1).toUpperCase())
+              .fontSize(17)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(PRIMARY)
+          }
+          .width(56)
+          .height(56)
           .borderRadius(16)
-          .objectFit(ImageFit.Cover)
-          .backgroundColor('#EEF2F6')
-      } else {
-        Stack({ alignContent: Alignment.Center }) {
-          Text(this.resourceCode === '' ? 'SIGN' : this.resourceCode)
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#667085')
-            .textAlign(TextAlign.Center)
+          .backgroundColor(PRIMARY_SOFT)
         }
-        .width(120)
-        .height(120)
-        .borderRadius(16)
-        .backgroundColor('#EEF2F6')
-      }
 
-      Column({ space: 10 }) {
-        Text(this.getDisplayName())
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column({ space: 5 }) {
+          Text(this.getDisplayName())
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Text(`目标编码：${this.getCodeLabel()}`)
-          .fontSize(15)
-          .fontColor('#667085')
+          if (this.resourceCode !== '') {
+            Text(this.resourceCode)
+              .fontSize(12)
+              .fontColor(TEXT_SUB)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
+      .width('100%')
+      .padding({ top: 4, bottom: 16 })
+      .alignItems(VerticalAlign.Center)
+
+      Row()
+        .width('100%')
+        .height(1)
+        .backgroundColor(BORDER)
     }
     .width('100%')
-    .padding(18)
-    .backgroundColor(CARD_BG)
-    .borderRadius(20)
+    .backgroundColor(SURFACE)
   }
 
+  /** 普通训练内容。 */
   /** 普通训练内容。 */
   @Builder
   private buildPracticeContent(): void {
     Scroll() {
-      Column({ space: 20 }) {
+      Column({ space: 16 }) {
         this.buildReferenceCard()
 
         GestureAvatarCard({
@@ -657,11 +674,11 @@ struct GesturePracticePageRefactored {
 
         Button('打开相机')
           .width('100%')
-          .height(54)
-          .fontSize(18)
+          .height(48)
+          .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .borderRadius(27)
-          .backgroundColor('#111827')
+          .borderRadius(16)
+          .backgroundColor(PRIMARY)
           .fontColor('#FFFFFF')
           .onClick(async () => {
             await this.openCameraOverlay()
@@ -669,7 +686,7 @@ struct GesturePracticePageRefactored {
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })
-      .padding({ left: 0, right: 0, top: 6, bottom: 20 })
+      .padding({ left: 0, right: 0, top: 0, bottom: 20 })
       .alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start)
     }
@@ -701,7 +718,7 @@ struct GesturePracticePageRefactored {
       }
       .width('100%')
       .height('100%')
-      .padding({ left: 16, right: 16, top: 16, bottom: 0 })
+      .padding({ left: 16, right: 16, top: 12, bottom: 0 })
       .backgroundColor(SURFACE)
       .alignItems(HorizontalAlign.Start)
       .justifyContent(FlexAlign.Start)

@@ -30,17 +30,33 @@ export struct GestureCameraActionPanel {
   /** 丢弃 raw dataset 样本回调。 */
   onDiscardDataset: () => void = () => {}
 
+  /** 获取主按钮背景色。 */
+  private getPrimaryButtonColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return '#22C55E'
+    }
+    return '#FFFFFF'
+  }
+
+  /** 获取主按钮文字色。 */
+  private getPrimaryTextColor(): string {
+    if (this.hasRecognitionSucceeded) {
+      return '#FFFFFF'
+    }
+    return '#111827'
+  }
+
   build() {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Button(this.primaryButtonText)
           .layoutWeight(1)
-          .height(48)
+          .height(50)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .backgroundColor(this.hasRecognitionSucceeded ? '#16A34A' : '#2D6CDF')
-          .borderRadius(18)
+          .fontColor(this.getPrimaryTextColor())
+          .backgroundColor(this.getPrimaryButtonColor())
+          .borderRadius(25)
           .onClick(() => {
             this.onToggleRecognition()
           })
@@ -48,12 +64,12 @@ export struct GestureCameraActionPanel {
         if (this.enableDatasetCollect) {
           Button(this.isDatasetCollecting ? '采集中' : '采集样本')
             .layoutWeight(1)
-            .height(48)
+            .height(50)
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor('#FFFFFF')
-            .backgroundColor('#F97316')
-            .borderRadius(18)
+            .backgroundColor('rgba(249,115,22,0.92)')
+            .borderRadius(25)
             .enabled(!this.isDatasetCollecting && !this.isDatasetWaitingConfirm)
             .onClick(() => {
               this.onStartDatasetCollect()
@@ -67,10 +83,11 @@ export struct GestureCameraActionPanel {
           Button(this.isDatasetWaitingConfirm ? '保存样本' : '取消采集')
             .layoutWeight(1)
             .height(44)
-            .fontSize(15)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
             .fontColor('#FFFFFF')
-            .backgroundColor(this.isDatasetWaitingConfirm ? '#16A34A' : '#6B7280')
-            .borderRadius(16)
+            .backgroundColor(this.isDatasetWaitingConfirm ? 'rgba(34,197,94,0.92)' : 'rgba(107,114,128,0.88)')
+            .borderRadius(22)
             .onClick(() => {
               if (this.isDatasetWaitingConfirm) {
                 this.onConfirmSaveDataset()
@@ -83,10 +100,11 @@ export struct GestureCameraActionPanel {
             Button('丢弃样本')
               .layoutWeight(1)
               .height(44)
-              .fontSize(15)
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
               .fontColor('#FFFFFF')
-              .backgroundColor('#EF4444')
-              .borderRadius(16)
+              .backgroundColor('rgba(239,68,68,0.92)')
+              .borderRadius(22)
               .onClick(() => {
                 this.onDiscardDataset()
               })
