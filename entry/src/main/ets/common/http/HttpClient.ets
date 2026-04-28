@@ -42,6 +42,8 @@ export class HttpClient {
       }
       HttpClient.attachAuthHeaders(headers, requestToken)
 
+      console.info(`[HttpClient] binary request path=${path}, tokenLength=${requestToken.length}`)
+
       const response = await httpRequest.request(
         `${AppConfig.BASE_URL}${path}`,
         {
@@ -70,6 +72,8 @@ export class HttpClient {
     }
     const requestToken = HttpClient.resolveToken(options.token)
     HttpClient.attachAuthHeaders(headers, requestToken)
+
+    console.info(`[HttpClient] request path=${path}, tokenLength=${requestToken.length}`)
 
     try {
       const response = await httpRequest.request(
