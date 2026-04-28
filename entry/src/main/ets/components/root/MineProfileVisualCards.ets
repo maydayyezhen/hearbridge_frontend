@@ -6,6 +6,9 @@ const PRIMARY_SOFT: string = '#EAF1FF'
 const TEXT_MAIN: string = '#11233C'
 const TEXT_SUB: string = '#7C8FA6'
 const DANGER: string = '#E5484D'
+const BORDER: string = '#E5EAF3'
+const ICON_MUTED: string = '#9AACBF'
+
 
 /**
  * 我的页头像展示组件。
@@ -48,16 +51,22 @@ export struct MineAvatarView {
 export struct MineProfileHeaderCard {
   /** 显示名称。 */
   @Prop displayName: string = ''
+
   /** 用户名。 */
   @Prop username: string = ''
+
   /** 用户 ID。 */
   @Prop userId: number = 0
+
   /** 头像地址。 */
   @Prop avatarUrl: string = ''
+
   /** 头像兜底文字。 */
   @Prop avatarText: string = 'H'
+
   /** 分类数量。 */
   @Prop categoryCount: number = 0
+
   /** 最近练习标题。 */
   @Prop recentPracticeTitle: string = ''
 
@@ -67,120 +76,100 @@ export struct MineProfileHeaderCard {
   /** 打开最近练习回调。 */
   onOpenRecentPractice: () => void = () => {}
 
+  /**
+   * 构建普通信息行。
+   */
   @Builder
-  private buildMiniStatus(label: string, value: string): void {
-    Column({ space: 6 }) {
-      Text(label)
-        .fontSize(12)
-        .fontColor(TEXT_SUB)
+  private buildInfoRow(label: string, value: string, clickable: boolean, onClickAction: () => void): void {
+    Column() {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text(label)
+            .fontSize(13)
+            .fontColor(TEXT_SUB)
 
-      Text(value)
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(TEXT_MAIN)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(value)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(clickable ? PRIMARY : TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        if (clickable) {
+          SymbolGlyph($r('sys.symbol.chevron_forward'))
+            .fontSize(14)
+            .fontColor(['#95A7C0'])
+        }
+      }
+      .width('100%')
+      .padding({ top: 14, bottom: 14 })
+      .onClick(() => {
+        if (clickable) {
+          onClickAction()
+        }
+      })
+
+      Row()
+        .width('100%')
+        .height(1)
+        .backgroundColor(BORDER)
     }
-    .layoutWeight(1)
-    .padding(14)
-    .backgroundColor('#F7FAFE')
-    .borderRadius(16)
-    .alignItems(HorizontalAlign.Start)
+    .width('100%')
   }
 
   build() {
     Column({ space: 0 }) {
-      Stack({ alignContent: Alignment.TopStart }) {
-        Row()
-          .width('100%')
-          .height(136)
-          .linearGradient({
-            angle: 135,
-            colors: [['#D9ECFF', 0], ['#BBD9FF', 0.52], ['#F7FBFF', 1]]
-          })
-          .borderRadius(28)
+      Row({ space: 14 }) {
+        MineAvatarView({
+          avatarUrl: this.avatarUrl,
+          avatarText: this.avatarText,
+          avatarSize: 64
+        })
+
+        Column({ space: 5 }) {
+          Text(this.displayName)
+            .fontSize(23)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(TEXT_MAIN)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(this.username.trim().length > 0 ? `@${this.username}` : '欢迎使用听桥')
+            .fontSize(14)
+            .fontColor(TEXT_SUB)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(this.userId > 0 ? `ID ${this.userId}` : '未登录用户')
+            .fontSize(12)
+            .fontColor('#9AA8BA')
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
       }
       .width('100%')
-      .height(136)
+      .padding({ top: 4, bottom: 18 })
 
-      Column({ space: 14 }) {
-        Row({ space: 14 }) {
-          Stack({ alignContent: Alignment.Center }) {
-            Row()
-              .width(82)
-              .height(82)
-              .borderRadius(41)
-              .backgroundColor('#FFFFFF')
-
-            MineAvatarView({
-              avatarUrl: this.avatarUrl,
-              avatarText: this.avatarText,
-              avatarSize: 72
-            })
-          }
-          .width(82)
-          .height(82)
-          .margin({ top: -42 })
-
-          Column({ space: 6 }) {
-            Text(this.displayName)
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(TEXT_MAIN)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            Text(this.username.trim().length > 0 ? `@${this.username}` : '欢迎使用听桥')
-              .fontSize(14)
-              .fontColor(TEXT_SUB)
-
-            Text(this.userId > 0 ? `ID ${this.userId}` : '还没有登录用户编号')
-              .fontSize(12)
-              .fontColor('#9AA8BA')
-          }
-          .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
-          .margin({ top: -22 })
-        }
+      Row()
         .width('100%')
+        .height(1)
+        .backgroundColor(BORDER)
 
-        Row({ space: 10 }) {
-          this.buildMiniStatus('分类', `${this.categoryCount}`)
-
-          Column({ space: 6 }) {
-            Text('最近练习')
-              .fontSize(12)
-              .fontColor(TEXT_SUB)
-
-            Text(this.recentPracticeTitle)
-              .fontSize(17)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.recentPracticeEnabled ? PRIMARY : TEXT_MAIN)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .layoutWeight(1)
-          .padding(14)
-          .backgroundColor('#F7FAFE')
-          .borderRadius(16)
-          .alignItems(HorizontalAlign.Start)
-          .onClick(() => {
-            if (this.recentPracticeEnabled) {
-              this.onOpenRecentPractice()
-            }
-          })
+      this.buildInfoRow(
+        '最近练习',
+        this.recentPracticeTitle,
+        this.recentPracticeEnabled,
+        () => {
+          this.onOpenRecentPractice()
         }
-        .width('100%')
-      }
-      .width('100%')
-      .padding({ left: 18, right: 18, bottom: 18 })
-      .backgroundColor(CARD_BG)
-      .borderRadius(28)
+      )
     }
     .width('100%')
     .backgroundColor(CARD_BG)
-    .borderRadius(28)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
   }
 }
 
@@ -189,15 +178,19 @@ export struct MineProfileHeaderCard {
  */
 @Component
 export struct MineMenuVisualCard {
-  /** 打开收藏页回调。 */
+  /** 打开收藏页回调，当前正式页不展示。 */
   onOpenFavorites: () => void = () => {}
+
   /** 打开账号资料回调。 */
   onOpenAccountProfile: () => void = () => {}
+
   /** 打开账号安全回调。 */
   onOpenAccountSecurity: () => void = () => {}
-  /** 打开帮助反馈回调。 */
+
+  /** 打开帮助反馈回调，当前正式页不展示。 */
   onOpenHelpFeedback: () => void = () => {}
-  /** 打开关于听桥回调。 */
+
+  /** 打开关于听桥回调，当前正式页不展示。 */
   onOpenAboutHearBridge: () => void = () => {}
 
   private pushPage(url: string): void {
@@ -209,58 +202,83 @@ export struct MineMenuVisualCard {
   }
 
   @Builder
-  private buildMenuRow(icon: Resource, title: string, onClickAction: () => void): void {
-    Row({ space: 12 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Row()
-          .width(34)
-          .height(34)
-          .borderRadius(17)
-          .backgroundColor(PRIMARY_SOFT)
+  private buildMenuRow(icon: Resource, title: string, onClickAction: () => void, showDivider: boolean): void {
+    Column() {
+      Row({ space: 14 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph(icon)
+            .fontSize(18)
+            .fontColor([PRIMARY])
+        }
+        .width(40)
+        .height(40)
+        .borderRadius(14)
+        .backgroundColor(PRIMARY_SOFT)
 
-        SymbolGlyph(icon)
-          .fontSize(18)
-          .fontColor([PRIMARY])
+        Text(title)
+          .layoutWeight(1)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(TEXT_MAIN)
+
+        SymbolGlyph($r('sys.symbol.chevron_forward'))
+          .fontSize(15)
+          .fontColor(['#95A7C0'])
       }
-      .width(34)
-      .height(34)
+      .width('100%')
+      .padding({ top: 16, bottom: 16 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        onClickAction()
+      })
 
-      Text(title)
-        .layoutWeight(1)
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(TEXT_MAIN)
-
-      SymbolGlyph($r('sys.symbol.chevron_forward'))
-        .fontSize(15)
-        .fontColor(['#95A7C0'])
+      if (showDivider) {
+        Row()
+          .width('100%')
+          .height(1)
+          .backgroundColor(BORDER)
+          .margin({ left: 54 })
+      }
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 16 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(18)
-    .onClick(() => {
-      onClickAction()
-    })
+    .backgroundColor(CARD_BG)
   }
 
   build() {
-    Column({ space: 10 }) {
-      this.buildMenuRow($r('sys.symbol.person'), '账号资料', () => {
-        this.pushPage('pages/MineProfilePage')
-        this.onOpenAccountProfile()
-      })
+    Column({ space: 0 }) {
+      Row() {
+        Text('账号设置')
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(TEXT_MAIN)
 
-      this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', () => {
-        this.pushPage('pages/MineSecurityPage')
-        this.onOpenAccountSecurity()
-      })
+        Blank()
+      }
+      .width('100%')
+      .padding({ top: 8, bottom: 8 })
+
+      this.buildMenuRow(
+        $r('sys.symbol.person'),
+        '账号资料',
+        () => {
+          this.pushPage('pages/MineProfilePage')
+          this.onOpenAccountProfile()
+        },
+        true
+      )
+
+      this.buildMenuRow(
+        $r('sys.symbol.lock'),
+        '账号与安全',
+        () => {
+          this.pushPage('pages/MineSecurityPage')
+          this.onOpenAccountSecurity()
+        },
+        false
+      )
     }
     .width('100%')
-    .padding(8)
     .backgroundColor(CARD_BG)
-    .borderRadius(28)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
   }
 }
 
@@ -271,99 +289,102 @@ export struct MineMenuVisualCard {
 export struct MineProfileEditVisualCard {
   /** 头像地址。 */
   @Prop avatarUrl: string = ''
+
   /** 头像兜底文字。 */
   @Prop avatarText: string = 'H'
+
   /** 头像提示文案。 */
   @Prop avatarTip: string = ''
+
   /** 昵称输入值。 */
   @Prop editNickname: string = ''
+
   /** 页面提示文案。 */
   @Prop tipText: string = ''
+
   /** 是否正在选择头像。 */
   @Prop pickingAvatar: boolean = false
+
   /** 是否正在上传头像。 */
   @Prop uploadingAvatar: boolean = false
+
   /** 是否正在提交。 */
   @Prop submitting: boolean = false
+
   /** 是否已经选择头像。 */
   @Prop hasSelectedAvatar: boolean = false
 
   /** 昵称变化回调。 */
   onNicknameChange: (value: string) => void = () => {}
+
   /** 选择头像回调。 */
   onPickAvatar: () => void = () => {}
+
   /** 上传头像回调。 */
   onUploadAvatar: () => void = () => {}
+
   /** 保存资料回调。 */
   onSaveProfile: () => void = () => {}
-  /** 退出登录回调。 */
+
+  /** 退出登录回调：当前线性账号资料页不展示退出入口。 */
   onLogout: () => void = () => {}
 
-  @Builder
-  private buildInput(label: string, placeholder: string, value: string, onChange: (value: string) => void): void {
-    Column({ space: 7 }) {
-      Text(label)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#3F5672')
-
-      TextInput({ text: value, placeholder: placeholder })
-        .width('100%')
-        .height(52)
-        .fontSize(16)
-        .fontColor('#1D2F45')
-        .placeholderColor('#778CA7')
-        .placeholderFont({ size: 15 })
-        .backgroundColor('#F8FBFF')
-        .borderRadius(16)
-        .border({ width: 1, color: '#C8D8EA' })
-        .padding({ left: 15, right: 15 })
-        .onChange(onChange)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
+  /**
+   * 判断提示是否为错误状态。
+   */
+  private isErrorTip(text: string): boolean {
+    return text.indexOf('失败') >= 0 ||
+      text.indexOf('失效') >= 0 ||
+      text.indexOf('不能为空') >= 0 ||
+      text.indexOf('请先') >= 0 ||
+      text.indexOf('不支持') >= 0
   }
 
-  build() {
-    Column({ space: 16 }) {
-      Text('账号资料')
-        .width('100%')
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
+  /**
+   * 构建线性分割线。
+   */
+  @Builder
+  private buildDivider(leftMargin: number = 0): void {
+    Row()
+      .width('100%')
+      .height(1)
+      .backgroundColor(BORDER)
+      .margin({ left: leftMargin })
+  }
 
+  /**
+   * 构建头像设置区域。
+   */
+  @Builder
+  private buildAvatarSection(): void {
+    Column({ space: 0 }) {
       Row({ space: 14 }) {
         MineAvatarView({
           avatarUrl: this.avatarUrl,
           avatarText: this.avatarText,
-          avatarSize: 72
+          avatarSize: 64
         })
 
-        Column({ space: 8 }) {
-          Text('当前头像')
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2A44')
-
-          Text(this.avatarTip.trim().length > 0 ? this.avatarTip : '可以从相册选择新头像。')
-            .fontSize(12)
-            .lineHeight(18)
-            .fontColor(this.avatarTip.indexOf('失败') >= 0 ? DANGER : TEXT_SUB)
-            .maxLines(2)
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
+        Text('头像')
+          .layoutWeight(1)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(TEXT_MAIN)
       }
       .width('100%')
+      .padding({ top: 12, bottom: 14 })
+      .alignItems(VerticalAlign.Center)
 
       Row({ space: 10 }) {
         Button(this.pickingAvatar ? '读取中...' : '从相册选择')
           .layoutWeight(1)
           .height(44)
           .fontSize(14)
-          .fontColor('#2E79F4')
-          .backgroundColor('#F5F8FD')
-          .borderRadius(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY)
+          .backgroundColor('#F7FAFE')
+          .borderRadius(14)
+          .border({ width: 1, color: BORDER })
           .enabled(!this.pickingAvatar && !this.uploadingAvatar)
           .onClick(() => {
             this.onPickAvatar()
@@ -373,65 +394,85 @@ export struct MineProfileEditVisualCard {
           .layoutWeight(1)
           .height(44)
           .fontSize(14)
-          .fontColor('#2E79F4')
-          .backgroundColor('#EEF5FF')
-          .borderRadius(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.hasSelectedAvatar ? PRIMARY : ICON_MUTED)
+          .backgroundColor('#F7FAFE')
+          .borderRadius(14)
+          .border({ width: 1, color: BORDER })
           .enabled(!this.uploadingAvatar && this.hasSelectedAvatar)
           .onClick(() => {
             this.onUploadAvatar()
           })
       }
       .width('100%')
+      .padding({ bottom: 14 })
 
-      this.buildInput('昵称', '请输入昵称', this.editNickname, (value: string): void => {
-        this.onNicknameChange(value)
-      })
-
-      if (this.tipText.trim().length > 0) {
-        Text(this.tipText)
-          .width('100%')
-          .fontSize(12)
-          .lineHeight(18)
-          .fontColor(this.tipText.indexOf('失败') >= 0 ? DANGER : TEXT_SUB)
-      }
-
-      Row({ space: 12 }) {
-        Button(this.submitting ? '保存中...' : '保存资料')
-          .layoutWeight(1)
-          .height(46)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .linearGradient({
-            angle: 90,
-            colors: [['#5FA7FF', 0], ['#2E79F4', 1]]
-          })
-          .borderRadius(18)
-          .enabled(!this.submitting)
-          .onClick(() => {
-            this.onSaveProfile()
-          })
-
-        Button('退出')
-          .width(92)
-          .height(46)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(DANGER)
-          .backgroundColor('#FFF1F1')
-          .borderRadius(18)
-          .enabled(!this.submitting)
-          .onClick(() => {
-            this.onLogout()
-          })
-      }
-      .width('100%')
+      this.buildDivider()
     }
     .width('100%')
-    .padding(18)
+  }
+
+  /**
+   * 构建昵称编辑区域。
+   */
+  @Builder
+  private buildNicknameSection(): void {
+    Column({ space: 10 }) {
+      Text('昵称')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TEXT_MAIN)
+
+      TextInput({ text: this.editNickname, placeholder: '请输入昵称' })
+        .width('100%')
+        .height(48)
+        .fontSize(16)
+        .fontColor(TEXT_MAIN)
+        .placeholderColor(ICON_MUTED)
+        .backgroundColor('#F7FAFE')
+        .borderRadius(14)
+        .border({ width: 1, color: BORDER })
+        .padding({ left: 14, right: 14 })
+        .onChange((value: string): void => {
+          this.onNicknameChange(value)
+        })
+    }
+    .width('100%')
+    .padding({ top: 16, bottom: 16 })
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /**
+   * 构建保存按钮区域。
+   */
+  @Builder
+  private buildSaveSection(): void {
+    Column({ space: 0 }) {
+      Button(this.submitting ? '保存中...' : '保存资料')
+        .width('100%')
+        .height(48)
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#FFFFFF')
+        .backgroundColor(PRIMARY)
+        .borderRadius(16)
+        .enabled(!this.submitting)
+        .onClick(() => {
+          this.onSaveProfile()
+        })
+    }
+    .width('100%')
+    .padding({ top: 2, bottom: 8 })
+  }
+
+  build() {
+    Column({ space: 0 }) {
+      this.buildAvatarSection()
+      this.buildNicknameSection()
+      this.buildSaveSection()
+    }
+    .width('100%')
     .backgroundColor(CARD_BG)
-    .borderRadius(28)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
     .alignItems(HorizontalAlign.Start)
   }
 }

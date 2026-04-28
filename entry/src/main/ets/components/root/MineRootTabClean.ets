@@ -111,7 +111,7 @@ export struct MineRootTabClean {
   /** 构建正式我的页主内容。 */
   @Builder
   private buildMainContent(): void {
-    Column({ space: 16 }) {
+    Column({ space: 0 }) {
       MineProfileHeaderCard({
         displayName: this.getDisplayName(),
         username: this.username,
@@ -125,6 +125,10 @@ export struct MineRootTabClean {
           this.openRecentPractice()
         }
       })
+
+      Row()
+        .width('100%')
+        .height(12)
 
       MineMenuVisualCard({
         onOpenFavorites: (): void => {},
@@ -150,7 +154,7 @@ export struct MineRootTabClean {
         }
         .width('100%')
         .constraintSize({ minHeight: '100%' })
-        .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 16, bottom: 24 })
+        .padding({ left: 16, right: 16, top: this.loginOnly ? 42 : 12, bottom: 24 })
         .alignItems(HorizontalAlign.Start)
         .justifyContent(FlexAlign.Start)
       }

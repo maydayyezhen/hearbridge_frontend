@@ -5,6 +5,7 @@
     "pages/GesturePracticePage",
     "pages/GesturePracticePageRefactored",
     "pages/MineProfilePage",
-    "pages/MineSecurityPage"
+    "pages/MineSecurityPage",
+    "pages/MinePasswordPage"
   ]
 }

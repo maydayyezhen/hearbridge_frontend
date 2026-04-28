@@ -21,16 +21,16 @@ struct MineProfilePage {
 
   @Builder
   private buildTopBar(): void {
-    Row({ space: 12 }) {
+    Row({ space: 10 }) {
       Button() {
         SymbolGlyph($r('sys.symbol.chevron_backward'))
           .fontSize(22)
           .fontColor([SECONDARY_TEXT])
       }
-      .width(40)
-      .height(40)
-      .borderRadius(14)
-      .backgroundColor(SURFACE)
+      .width(36)
+      .height(36)
+      .borderRadius(18)
+      .backgroundColor(Color.Transparent)
       .stateEffect(false)
       .onClick(() => {
         this.goBack()
@@ -44,6 +44,7 @@ struct MineProfilePage {
       Blank()
     }
     .width('100%')
+    .padding({ top: 2, bottom: 8 })
   }
 
   @Builder
@@ -79,7 +80,7 @@ struct MineProfilePage {
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 0 })
+    .padding({ left: 16, right: 16, top: 12, bottom: 0 })
     .backgroundColor(SURFACE)
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
