@@ -9,6 +9,7 @@ const SURFACE: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
 const BORDER: string = '#E5EAF3'
 const SOFT_BG: string = '#EAF1FF'
+const PAGE_SIZE: number = 20
 
 @Entry
 @Component
@@ -17,11 +18,15 @@ struct GestureListPage {
   @State categoryName: string = ''
   @State gestureList: GestureItemDto[] = []
   @State loading: boolean = false
+  @State loadingMore: boolean = false
+  @State pageNo: number = 1
+  @State total: number = 0
+  @State hasNext: boolean = false
   @State errorText: string = ''
 
   aboutToAppear(): void {
     this.readParams()
-    void this.loadGestureItems()
+    void this.loadGestureItems(true)
   }
 
   private readParams(): void {
@@ -36,18 +41,33 @@ struct GestureListPage {
     }
   }
 
-  private async loadGestureItems(): Promise<void> {
-    this.loading = true
-    this.errorText = ''
+  private async loadGestureItems(reset: boolean): Promise<void> {
+    if (this.loading || this.loadingMore) {
+      return
+    }
+
+    if (reset) {
+      this.loading = true
+      this.pageNo = 1
+      this.errorText = ''
+    } else {
+      this.loadingMore = true
+    }
 
     try {
-      this.gestureList = await GestureApi.getGestureItems(this.categoryCode)
-      console.info(`[GestureListPage] resource count=${this.gestureList.length}`)
+      const nextPageNo = reset ? 1 : this.pageNo + 1
+      const page = await GestureApi.getGestureItemsPage(this.categoryCode, nextPageNo, PAGE_SIZE)
+      this.gestureList = reset ? page.records : this.gestureList.concat(page.records)
+      this.pageNo = page.pageNo
+      this.total = page.total
+      this.hasNext = page.hasNext
+      console.info(`[GestureListPage] resource count=${this.gestureList.length}, total=${this.total}`)
     } catch (err) {
       this.errorText = `资源列表加载失败：${JSON.stringify(err)}`
       console.error(this.errorText)
     } finally {
       this.loading = false
+      this.loadingMore = false
     }
   }
 
@@ -214,6 +234,21 @@ struct GestureListPage {
   }
 
   @Builder
+  private buildLoadMoreRow(): void {
+    Text(this.loadingMore ? '加载中...' : '加载更多资源')
+      .width('100%')
+      .fontSize(13)
+      .fontColor(PRIMARY)
+      .textAlign(TextAlign.Center)
+      .padding({ top: 16, bottom: 16 })
+      .onClick(() => {
+        if (this.hasNext && !this.loadingMore) {
+          void this.loadGestureItems(false)
+        }
+      })
+  }
+
+  @Builder
   private buildListContent(): void {
     Scroll() {
       Column({ space: 0 }) {
@@ -224,6 +259,10 @@ struct GestureListPage {
           },
           (item: GestureItemDto) => item.id.toString()
         )
+
+        if (this.hasNext) {
+          this.buildLoadMoreRow()
+        }
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })
@@ -241,9 +280,9 @@ struct GestureListPage {
   @Builder
   private buildContentArea(): void {
     Stack({ alignContent: Alignment.TopStart }) {
-      if (this.loading) {
+      if (this.loading && this.gestureList.length === 0) {
         this.buildStateContent('加载中...', '')
-      } else if (this.errorText !== '') {
+      } else if (this.errorText !== '' && this.gestureList.length === 0) {
         this.buildStateContent(this.errorText, '', true)
       } else if (this.gestureList.length === 0) {
         this.buildStateContent('当前分类下还没有资源数据', '后续可以继续补充这个分类的手语资源')
