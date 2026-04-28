@@ -46,17 +46,48 @@ export class GestureItemDto {
 }
 
 /**
+ * 通用分页结果。
+ */
+export class PageResultDto<T> {
+  /** 当前页数据。 */
+  records: T[]
+  /** 总记录数。 */
+  total: number
+  /** 当前页码。 */
+  pageNo: number
+  /** 每页数量。 */
+  pageSize: number
+  /** 总页数。 */
+  totalPages: number
+  /** 是否还有下一页。 */
+  hasNext: boolean
+
+  constructor(records: T[], total: number, pageNo: number, pageSize: number, totalPages: number, hasNext: boolean) {
+    this.records = records
+    this.total = total
+    this.pageNo = pageNo
+    this.pageSize = pageSize
+    this.totalPages = totalPages
+    this.hasNext = hasNext
+  }
+}
+
+/**
  * 手语训练统一搜索结果。
  */
 export class SignSearchResultDto {
   /** 搜索关键词。 */
   keyword: string
-  /** 匹配分类列表。 */
-  categories: CategoryDto[]
-  /** 匹配手势资源列表。 */
-  resources: GestureItemDto[]
+  /** 匹配分类分页结果。 */
+  categories: PageResultDto<CategoryDto>
+  /** 匹配手势资源分页结果。 */
+  resources: PageResultDto<GestureItemDto>
 
-  constructor(keyword: string, categories: CategoryDto[], resources: GestureItemDto[]) {
+  constructor(
+    keyword: string,
+    categories: PageResultDto<CategoryDto>,
+    resources: PageResultDto<GestureItemDto>
+  ) {
     this.keyword = keyword
     this.categories = categories
     this.resources = resources
