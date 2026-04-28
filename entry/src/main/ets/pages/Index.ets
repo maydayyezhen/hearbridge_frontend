@@ -5,6 +5,7 @@ import { TrainingRootTab } from '../components/root/TrainingRootTab'
 import { MineRootTabClean } from '../components/root/MineRootTabClean'
 import common from '@ohos.app.ability.common'
 import { restoreAuthState } from '../common/auth/AuthStorage'
+import { restoreRecentPracticeFromBackend } from '../common/practice/RecentPracticeStorage'
 
 const PAGE_BG: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
@@ -25,7 +26,12 @@ struct Index {
   private tabsController: TabsController = new TabsController()
 
   aboutToAppear(): void {
-    void restoreAuthState(this.getAbilityContext())
+    void this.initPage()
+  }
+
+  private async initPage(): Promise<void> {
+    await restoreAuthState(this.getAbilityContext())
+    await restoreRecentPracticeFromBackend()
     void this.loadCategories()
   }
 

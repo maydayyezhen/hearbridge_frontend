@@ -2,6 +2,7 @@ import { router } from '@kit.ArkUI'
 import { GestureApi } from '../../api/GestureApi'
 import { CategoryDto, GestureItemDto } from '../../model/ApiModels'
 import { GestureListPageParams, GesturePracticePageParams } from '../../model/GestureModels'
+import { saveRecentPracticeLocalAndSync } from '../../common/practice/RecentPracticeStorage'
 
 const PAGE_BG: string = '#FFFFFF'
 const PRIMARY: string = '#2D6CDF'
@@ -208,11 +209,13 @@ export struct TrainingRootTab {
   /** 打开手势训练页。 */
   private openGestureResource(item: GestureItemDto): void {
     try {
-      AppStorage.setOrCreate('recent.practice.id', item.id)
-      AppStorage.setOrCreate('recent.practice.code', item.code)
-      AppStorage.setOrCreate('recent.practice.name', item.nameZh === '' ? item.code : item.nameZh)
-      AppStorage.setOrCreate('recent.practice.sigmlUrl', item.sigmlUrl)
-      AppStorage.setOrCreate('recent.practice.coverUrl', item.coverUrl)
+      void saveRecentPracticeLocalAndSync(
+        item.id,
+        item.code,
+        item.nameZh === '' ? item.code : item.nameZh,
+        item.sigmlUrl,
+        item.coverUrl
+      )
 
       const params: GesturePracticePageParams = new GesturePracticePageParams(
         item.id,

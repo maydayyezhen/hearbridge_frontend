@@ -1,5 +1,7 @@
+import { router } from '@kit.ArkUI'
 import { MineMenuVisualCard, MineProfileHeaderCard } from './MineProfileVisualCards'
 import { MineRootTab } from './MineRootTab'
+import { GesturePracticePageParams } from '../../model/GestureModels'
 
 const PAGE_BG: string = '#FFFFFF'
 
@@ -28,10 +30,20 @@ export struct MineRootTabClean {
   @StorageLink('auth.user.nickname') nickname: string = ''
   /** 当前头像地址。 */
   @StorageLink('auth.user.avatarUrl') avatarUrl: string = ''
+  /** 最近练习 ID。 */
+  @StorageLink('recent.practice.id') recentPracticeId: number = 0
+
   /** 最近练习编码。 */
   @StorageLink('recent.practice.code') recentPracticeCode: string = ''
+
   /** 最近练习名称。 */
   @StorageLink('recent.practice.name') recentPracticeName: string = ''
+
+  /** 最近练习 SiGML 地址。 */
+  @StorageLink('recent.practice.sigmlUrl') recentPracticeSigmlUrl: string = ''
+
+  /** 最近练习封面地址。 */
+  @StorageLink('recent.practice.coverUrl') recentPracticeCoverUrl: string = ''
 
   /** 获取展示名称。 */
   private getDisplayName(): string {
@@ -61,6 +73,41 @@ export struct MineRootTabClean {
     return '还没有开始练习'
   }
 
+  /**
+   * 判断是否存在可继续的最近练习。
+   */
+  private hasRecentPractice(): boolean {
+    return this.recentPracticeCode.trim().length > 0
+  }
+
+  /**
+   * 打开最近练习。
+   */
+  private openRecentPractice(): void {
+    if (!this.hasRecentPractice()) {
+      return
+    }
+
+    try {
+      const params: GesturePracticePageParams = new GesturePracticePageParams(
+        this.recentPracticeId,
+        this.recentPracticeCode,
+        this.getRecentPracticeTitle(),
+        this.recentPracticeSigmlUrl,
+        this.recentPracticeCoverUrl
+      )
+
+      router.pushUrl({
+        url: 'pages/GesturePracticePageRefactored',
+        params: params
+      }).catch((err: Object) => {
+        console.error(`[MineRootTabClean] open recent practice failed: ${JSON.stringify(err)}`)
+      })
+    } catch (err) {
+      console.error(`[MineRootTabClean] open recent practice exception: ${JSON.stringify(err)}`)
+    }
+  }
+
   /** 构建正式我的页主内容。 */
   @Builder
   private buildMainContent(): void {
@@ -72,7 +119,11 @@ export struct MineRootTabClean {
         avatarUrl: this.avatarUrl,
         avatarText: this.getAvatarText(),
         categoryCount: this.categoryCount,
-        recentPracticeTitle: this.getRecentPracticeTitle()
+        recentPracticeTitle: this.getRecentPracticeTitle(),
+        recentPracticeEnabled: this.hasRecentPractice(),
+        onOpenRecentPractice: (): void => {
+          this.openRecentPractice()
+        }
       })
 
       MineMenuVisualCard({

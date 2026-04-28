@@ -61,6 +61,12 @@ export struct MineProfileHeaderCard {
   /** 最近练习标题。 */
   @Prop recentPracticeTitle: string = ''
 
+  /** 最近练习是否可点击。 */
+  @Prop recentPracticeEnabled: boolean = false
+
+  /** 打开最近练习回调。 */
+  onOpenRecentPractice: () => void = () => {}
+
   @Builder
   private buildMiniStatus(label: string, value: string): void {
     Column({ space: 6 }) {
@@ -140,7 +146,29 @@ export struct MineProfileHeaderCard {
 
         Row({ space: 10 }) {
           this.buildMiniStatus('分类', `${this.categoryCount}`)
-          this.buildMiniStatus('最近练习', this.recentPracticeTitle)
+
+          Column({ space: 6 }) {
+            Text('最近练习')
+              .fontSize(12)
+              .fontColor(TEXT_SUB)
+
+            Text(this.recentPracticeTitle)
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.recentPracticeEnabled ? PRIMARY : TEXT_MAIN)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .layoutWeight(1)
+          .padding(14)
+          .backgroundColor('#F7FAFE')
+          .borderRadius(16)
+          .alignItems(HorizontalAlign.Start)
+          .onClick(() => {
+            if (this.recentPracticeEnabled) {
+              this.onOpenRecentPractice()
+            }
+          })
         }
         .width('100%')
       }
@@ -218,17 +246,15 @@ export struct MineMenuVisualCard {
 
   build() {
     Column({ space: 10 }) {
-      this.buildMenuRow($r('sys.symbol.star'), '我的收藏', this.onOpenFavorites)
       this.buildMenuRow($r('sys.symbol.person'), '账号资料', () => {
         this.pushPage('pages/MineProfilePage')
         this.onOpenAccountProfile()
       })
+
       this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', () => {
         this.pushPage('pages/MineSecurityPage')
         this.onOpenAccountSecurity()
       })
-      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', this.onOpenHelpFeedback)
-      this.buildMenuRow($r('sys.symbol.info_circle'), '关于听桥', this.onOpenAboutHearBridge)
     }
     .width('100%')
     .padding(8)

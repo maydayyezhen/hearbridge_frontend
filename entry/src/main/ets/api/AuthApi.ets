@@ -1,6 +1,6 @@
 import { HttpClient } from '../common/http/HttpClient'
 import { AppConfig } from '../common/constants/AppConfig'
-import { AuthResponseDto, AuthUserDto } from '../model/ApiModels'
+import { AuthResponseDto, AuthUserDto, RecentPracticeDto } from '../model/ApiModels'
 
 class LoginPayload {
   username: string = ''
@@ -21,6 +21,14 @@ class PasswordPayload {
   oldPassword: string = ''
   newPassword: string = ''
   confirmPassword: string = ''
+}
+
+class RecentPracticePayload {
+  resourceId: number = 0
+  resourceCode: string = ''
+  chineseName: string = ''
+  sigmlUrl: string = ''
+  coverUrl: string = ''
 }
 
 export class AuthApi {
@@ -66,6 +74,29 @@ export class AuthApi {
     return AuthApi.parseUser(JSON.parse(text) as Record<string, Object>)
   }
 
+  /**
+   * 获取当前用户最近练习。
+   */
+  static async getRecentPractice(): Promise<RecentPracticeDto> {
+    const text = await HttpClient.get('/app/user/recent-practice')
+    return AuthApi.parseRecentPractice(JSON.parse(text) as Record<string, Object>)
+  }
+
+  /**
+   * 更新当前用户最近练习。
+   */
+  static async updateRecentPractice(practice: RecentPracticeDto): Promise<RecentPracticeDto> {
+    const payload = new RecentPracticePayload()
+    payload.resourceId = practice.resourceId
+    payload.resourceCode = practice.resourceCode
+    payload.chineseName = practice.chineseName
+    payload.sigmlUrl = practice.sigmlUrl
+    payload.coverUrl = practice.coverUrl
+
+    const text = await HttpClient.put('/app/user/recent-practice', payload)
+    return AuthApi.parseRecentPractice(JSON.parse(text) as Record<string, Object>)
+  }
+
   static async logout(token: string): Promise<void> {
     await HttpClient.post('/app/auth/logout', undefined, token)
   }
@@ -85,6 +116,16 @@ export class AuthApi {
       AuthApi.readString(source, 'username'),
       AuthApi.readString(source, 'nickname'),
       avatarUrl
+    )
+  }
+
+  private static parseRecentPractice(source: Record<string, Object>): RecentPracticeDto {
+    return new RecentPracticeDto(
+      AuthApi.readNumber(source, 'resourceId'),
+      AuthApi.readString(source, 'resourceCode'),
+      AuthApi.readString(source, 'chineseName'),
+      AuthApi.readString(source, 'sigmlUrl'),
+      AuthApi.readString(source, 'coverUrl')
     )
   }
 

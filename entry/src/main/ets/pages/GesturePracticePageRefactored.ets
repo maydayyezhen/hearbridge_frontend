@@ -7,6 +7,7 @@ import { GesturePracticePageParams } from '../model/GestureModels'
 import { GestureCameraOverlay } from '../components/gesture/GestureCameraOverlay'
 import { GestureAvatarCard } from '../components/gesture/GestureAvatarCard'
 import { GestureCameraSessionService } from '../service/gesture/GestureCameraSessionService'
+import { saveRecentPracticeLocalAndSync } from '../common/practice/RecentPracticeStorage'
 import {
   GestureRecognitionSessionService,
   GestureRecognitionSessionState
@@ -195,11 +196,13 @@ struct GesturePracticePageRefactored {
 
   /** 记录最近练习。 */
   private persistRecentPractice(): void {
-    AppStorage.setOrCreate('recent.practice.id', this.gestureId)
-    AppStorage.setOrCreate('recent.practice.code', this.resourceCode)
-    AppStorage.setOrCreate('recent.practice.name', this.chineseName === '' ? this.resourceCode : this.chineseName)
-    AppStorage.setOrCreate('recent.practice.sigmlUrl', this.sigmlUrl)
-    AppStorage.setOrCreate('recent.practice.coverUrl', this.coverUrl)
+    void saveRecentPracticeLocalAndSync(
+      this.gestureId,
+      this.resourceCode,
+      this.chineseName === '' ? this.resourceCode : this.chineseName,
+      this.sigmlUrl,
+      this.coverUrl
+    )
   }
 
   /** 应用 dataset 采集状态。 */

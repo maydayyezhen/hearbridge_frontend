@@ -46,6 +46,34 @@ export class GestureItemDto {
 }
 
 /**
+ * 最近练习 DTO。
+ */
+export class RecentPracticeDto {
+  /** 最近练习资源 ID。 */
+  resourceId: number
+
+  /** 最近练习资源编码。 */
+  resourceCode: string
+
+  /** 最近练习中文名。 */
+  chineseName: string
+
+  /** 最近练习 SiGML 地址。 */
+  sigmlUrl: string
+
+  /** 最近练习封面地址。 */
+  coverUrl: string
+
+  constructor(resourceId: number, resourceCode: string, chineseName: string, sigmlUrl: string, coverUrl: string) {
+    this.resourceId = resourceId
+    this.resourceCode = resourceCode
+    this.chineseName = chineseName
+    this.sigmlUrl = sigmlUrl
+    this.coverUrl = coverUrl
+  }
+}
+
+/**
  * 通用分页结果。
  */
 export class PageResultDto<T> {

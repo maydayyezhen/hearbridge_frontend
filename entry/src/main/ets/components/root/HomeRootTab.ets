@@ -75,7 +75,7 @@ export struct HomeRootTab {
         this.recentPracticeCoverUrl
       )
       router.pushUrl({
-        url: 'pages/GesturePracticePage',
+        url: 'pages/GesturePracticePageRefactored',
         params: params
       }).catch((err: Object) => {
         console.error(`[HomeRootTab] continue practice failed: ${JSON.stringify(err)}`)

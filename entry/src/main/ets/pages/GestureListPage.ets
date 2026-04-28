@@ -2,6 +2,7 @@ import { router } from '@kit.ArkUI'
 import { GestureApi } from '../api/GestureApi'
 import { GestureItemDto } from '../model/ApiModels'
 import { GestureListPageParams, GesturePracticePageParams } from '../model/GestureModels'
+import { saveRecentPracticeLocalAndSync } from '../common/practice/RecentPracticeStorage'
 
 const TEXT_MAIN: string = '#11233C'
 const SECONDARY_TEXT: string = '#6B7A90'
@@ -80,11 +81,13 @@ struct GestureListPage {
   }
 
   private persistRecentPractice(item: GestureItemDto): void {
-    AppStorage.setOrCreate('recent.practice.id', item.id)
-    AppStorage.setOrCreate('recent.practice.code', item.code)
-    AppStorage.setOrCreate('recent.practice.name', item.nameZh === '' ? item.code : item.nameZh)
-    AppStorage.setOrCreate('recent.practice.sigmlUrl', item.sigmlUrl)
-    AppStorage.setOrCreate('recent.practice.coverUrl', item.coverUrl)
+    void saveRecentPracticeLocalAndSync(
+      item.id,
+      item.code,
+      item.nameZh === '' ? item.code : item.nameZh,
+      item.sigmlUrl,
+      item.coverUrl
+    )
   }
 
   private goToPractice(item: GestureItemDto): void {
