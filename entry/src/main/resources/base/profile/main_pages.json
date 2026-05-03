@@ -2,6 +2,7 @@
   "src": [
     "pages/Index",
     "pages/GestureListPage",
+    "pages/SignVideoRecognitionPage",
     "pages/GesturePracticePage",
     "pages/GesturePracticePageRefactored",
     "pages/MineProfilePage",

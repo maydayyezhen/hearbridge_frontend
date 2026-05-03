@@ -318,6 +318,64 @@ export struct HomeRootTab {
   }
 
   /**
+   * 构建句子视频识别入口。
+   */
+  @Builder
+  private buildSentenceVideoEntry(): void {
+    Column({ space: 0 }) {
+      Row({ space: 14 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Text('视')
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(PRIMARY)
+        }
+        .width(44)
+        .height(44)
+        .borderRadius(14)
+        .backgroundColor(PRIMARY_SOFT)
+
+        Column({ space: 4 }) {
+          Text('句子视频识别')
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(TEXT_MAIN)
+
+          Text('上传短视频，查看原始识别与 AI 语义修正')
+            .fontSize(12)
+            .fontColor(TEXT_SUB)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        SymbolGlyph($r('sys.symbol.chevron_forward'))
+          .fontSize(15)
+          .fontColor(['#95A7C0'])
+      }
+      .width('100%')
+      .padding({ top: 14, bottom: 14 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        router.pushUrl({
+          url: 'pages/SignVideoRecognitionPage'
+        }).catch((err: Object) => {
+          console.error(`[HomeRootTab] open sign video recognition failed: ${JSON.stringify(err)}`)
+        })
+      })
+
+      Row()
+        .width('100%')
+        .height(1)
+        .backgroundColor(BORDER)
+        .margin({ left: 58 })
+    }
+    .width('100%')
+    .backgroundColor(CARD_BG)
+  }
+
+  /**
    * 构建单个分类行。
    */
   @Builder
@@ -421,6 +479,7 @@ export struct HomeRootTab {
     Scroll() {
       Column({ space: 16 }) {
         this.buildHeroCard()
+        this.buildSentenceVideoEntry()
 
         if (this.loading) {
           this.buildStateCard('正在加载分类')
